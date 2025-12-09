@@ -1,0 +1,123 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { Heart, ShoppingCart } from "lucide-react";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { cn } from "@/lib/utils";
+
+interface ProductCardProps {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  originalPrice?: number;
+  image: string;
+  brand?: string;
+  stockStatus: "in_stock" | "low_stock" | "out_of_stock";
+  stockCount?: number;
+  isWishlisted?: boolean;
+  onAddToCart?: () => void;
+  onToggleWishlist?: () => void;
+}
+
+export function ProductCard({
+  id,
+  name,
+  slug,
+  price,
+  originalPrice,
+  image,
+  brand,
+  stockStatus,
+  stockCount,
+  isWishlisted = false,
+  onAddToCart,
+  onToggleWishlist,
+}: ProductCardProps) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  return (
+    <div className="group relative bg-white rounded-lg border border-charcoal/10 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+      {/* Wishlist Button */}
+      <button
+        onClick={onToggleWishlist}
+        className="absolute top-3 right-3 z-10 h-9 w-9 rounded-full bg-white/90 backdrop-blur flex items-center justify-center transition-all hover:bg-gold hover:text-white"
+      >
+        <Heart
+          className={cn(
+            "h-5 w-5 transition-all",
+            isWishlisted && "fill-current text-gold"
+          )}
+        />
+      </button>
+
+      {/* Product Image */}
+      <Link href={`/products/${slug}`} className="block relative aspect-square overflow-hidden bg-cream-light">
+        {!imageLoaded && (
+          <div className="absolute inset-0 bg-gradient-to-r from-cream-light via-white to-cream-light animate-shimmer" />
+        )}
+        <Image
+          src={image}
+          alt={name}
+          fill
+          className={cn(
+            "object-cover transition-all duration-500 group-hover:scale-105",
+            imageLoaded ? "opacity-100" : "opacity-0"
+          )}
+          onLoad={() => setImageLoaded(true)}
+        />
+        
+        {/* Stock Badge */}
+        {stockStatus === "low_stock" && (
+          <Badge className="absolute top-3 left-3 bg-warning text-white">
+            Only {stockCount} left
+          </Badge>
+        )}
+        {stockStatus === "out_of_stock" && (
+          <Badge className="absolute top-3 left-3 bg-error text-white">
+            Out of Stock
+          </Badge>
+        )}
+      </Link>
+
+      {/* Product Info */}
+      <div className="p-4 space-y-3">
+        {brand && (
+          <p className="text-xs font-medium text-charcoal-light uppercase tracking-wider">
+            {brand}
+          </p>
+        )}
+        
+        <Link href={`/products/${slug}`}>
+          <h3 className="font-display text-base font-semibold text-charcoal line-clamp-2 group-hover:text-gold transition-colors">
+            {name}
+          </h3>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          <span className="font-display text-xl font-bold text-gold">
+            Rs. {price.toLocaleString()}
+          </span>
+          {originalPrice && originalPrice > price && (
+            <span className="text-sm text-charcoal-light line-through">
+              Rs. {originalPrice.toLocaleString()}
+            </span>
+          )}
+        </div>
+
+        {/* Add to Cart Button */}
+        <Button
+          onClick={onAddToCart}
+          disabled={stockStatus === "out_of_stock"}
+          className="w-full bg-charcoal hover:bg-gold text-white transition-colors"
+        >
+          <ShoppingCart className="h-4 w-4 mr-2" />
+          {stockStatus === "out_of_stock" ? "Out of Stock" : "Add to Cart"}
+        </Button>
+      </div>
+    </div>
+  );
+}

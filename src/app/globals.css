@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 36 33% 99%;
+    --foreground: 0 0% 10%;
+    --card: 36 33% 99%;
+    --card-foreground: 0 0% 10%;
+    --popover: 36 33% 99%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 43 77% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 14% 97%;
+    --secondary-foreground: 0 0% 17%;
+    --muted: 30 14% 97%;
+    --muted-foreground: 0 0% 42%;
+    --accent: 43 77% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 43% 39%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 43 77% 52%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 10%;
+    --foreground: 36 33% 99%;
+    --card: 0 0% 17%;
+    --card-foreground: 36 33% 99%;
+    --popover: 0 0% 17%;
+    --popover-foreground: 36 33% 99%;
+    --primary: 43 77% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 17%;
+    --secondary-foreground: 36 33% 99%;
+    --muted: 0 0% 17%;
+    --muted-foreground: 0 0% 64%;
+    --accent: 43 77% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 43% 39%;
+    --destructive-foreground: 36 33% 99%;
+    --border: 0 0% 17%;
+    --input: 0 0% 17%;
+    --ring: 43 77% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-cream text-charcoal font-body antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
