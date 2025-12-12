@@ -275,13 +275,6 @@ export type Database = {
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "inventory_logs_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
         ]
       }
       notifications: {
@@ -321,6 +314,48 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          order_id: string | null
+          price: number
+          product_id: string | null
+          quantity: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          order_id?: string | null
+          price: number
+          product_id?: string | null
+          quantity: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          order_id?: string | null
+          price?: number
+          product_id?: string | null
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -457,55 +492,49 @@ export type Database = {
       }
       products: {
         Row: {
-          beauty_price: number
           brand_id: string | null
           category_id: string | null
           created_at: string | null
-          customer_price: number
           description: string | null
           id: string
-          images: Json | null
-          is_active: boolean | null
-          low_stock_threshold: number | null
+          images: string[] | null
+          is_featured: boolean | null
           name: string
-          retailer_price: number
-          sku: string | null
+          price_beauty_parlor: number
+          price_customer: number
+          price_retailer: number
           slug: string
           stock_quantity: number | null
           updated_at: string | null
         }
         Insert: {
-          beauty_price: number
           brand_id?: string | null
           category_id?: string | null
           created_at?: string | null
-          customer_price: number
           description?: string | null
           id?: string
-          images?: Json | null
-          is_active?: boolean | null
-          low_stock_threshold?: number | null
+          images?: string[] | null
+          is_featured?: boolean | null
           name: string
-          retailer_price: number
-          sku?: string | null
+          price_beauty_parlor: number
+          price_customer: number
+          price_retailer: number
           slug: string
           stock_quantity?: number | null
           updated_at?: string | null
         }
         Update: {
-          beauty_price?: number
           brand_id?: string | null
           category_id?: string | null
           created_at?: string | null
-          customer_price?: number
           description?: string | null
           id?: string
-          images?: Json | null
-          is_active?: boolean | null
-          low_stock_threshold?: number | null
+          images?: string[] | null
+          is_featured?: boolean | null
           name?: string
-          retailer_price?: number
-          sku?: string | null
+          price_beauty_parlor?: number
+          price_customer?: number
+          price_retailer?: number
           slug?: string
           stock_quantity?: number | null
           updated_at?: string | null
@@ -598,13 +627,6 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "wishlists_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "wishlists_user_id_fkey"
             columns: ["user_id"]

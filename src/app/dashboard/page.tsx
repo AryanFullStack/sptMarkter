@@ -1,9 +1,9 @@
 import { MainNav } from "@/components/main-nav";
 import { MainFooter } from "@/components/main-footer";
-import { CustomerDashboard } from "@/components/dashboards/customer-dashboard";
-import { RetailerDashboard } from "@/components/dashboards/retailer-dashboard";
-import { ParlorDashboard } from "@/components/dashboards/parlor-dashboard";
-import { AdminDashboard } from "@/components/dashboards/admin-dashboard";
+import CustomerDashboard from "@/components/dashboards/customer-dashboard";
+import RetailerDashboard from "@/components/dashboards/retailer-dashboard";
+import ParlorDashboard from "@/components/dashboards/parlor-dashboard";
+import AdminDashboard from "@/components/dashboards/admin-dashboard";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../supabase/server";
 
@@ -24,18 +24,17 @@ export default async function Dashboard() {
     .eq("id", user.id)
     .single();
 
-  const role = userData?.role || "local_customer";
+  const role = userData?.role || "customer";
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-[#FDFCF9]">
       <MainNav />
       
-      <main className="container mx-auto px-4 py-8">
-        {role === "admin" && <AdminDashboard user={userData} />}
-        {role === "sub_admin" && <AdminDashboard user={userData} />}
-        {role === "beauty_parlor" && <ParlorDashboard user={userData} />}
-        {role === "retailer" && <RetailerDashboard user={userData} />}
-        {role === "local_customer" && <CustomerDashboard user={userData} />}
+      <main>
+        {(role === "admin" || role === "sub_admin") && <AdminDashboard />}
+        {role === "beauty_parlor" && <ParlorDashboard />}
+        {role === "retailer" && <RetailerDashboard />}
+        {role === "customer" && <CustomerDashboard />}
       </main>
 
       <MainFooter />
