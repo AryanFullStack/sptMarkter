@@ -48,6 +48,7 @@ import { Trash, Tag, UserCog } from "lucide-react";
 import { UsersTable } from "./users-table";
 import { BrandsManager } from "./brands-manager";
 import { SalesmanManagement } from "@/components/admin/salesman-management";
+import { LedgerReports } from "@/components/admin/ledger-reports";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -185,6 +186,7 @@ export default function AdminDashboard() {
           <TabsTrigger value="brands" className="relative">
             Brands
           </TabsTrigger>
+          <TabsTrigger value="ledgers">Ledgers</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -494,6 +496,21 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <BrandsManager />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="ledgers" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-serif text-2xl flex items-center gap-2">
+                <DollarSign className="h-6 w-6 text-[#2D5F3F]" />
+                Ledger Reports
+              </CardTitle>
+              <p className="text-sm text-[#6B6B6B] mt-1">Consolidated view of shop pending limits and usage across all salesmen.</p>
+            </CardHeader>
+            <CardContent>
+              <LedgerReports />
             </CardContent>
           </Card>
         </TabsContent>

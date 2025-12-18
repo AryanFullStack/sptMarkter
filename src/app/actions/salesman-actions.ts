@@ -206,6 +206,7 @@ export async function createOrderForClient(
   clientId: string,
   items: any[],
   paidAmount: number,
+  brandId: string, // NEW: Added brandId
   notes?: string
 ) {
   const supabaseAuth = await createClient();
@@ -227,6 +228,20 @@ export async function createOrderForClient(
 
   if (salesmanData?.role !== "salesman") {
     return { error: "Unauthorized: Salesman access required" };
+  }
+
+  // Verify brand assignment
+  if (brandId) {
+    const { data: assignment } = await supabase
+      .from("salesman_brands")
+      .select("id")
+      .eq("salesman_id", user.id)
+      .eq("brand_id", brandId)
+      .single();
+      
+    if (!assignment) {
+      return { error: "Unauthorized: You are not assigned to this brand" };
+    }
   }
 
   // Get client data to determine role for pricing
@@ -278,6 +293,7 @@ export async function createOrderForClient(
       shipping_address: {}, // Will be updated by client or admin
       recorded_by: user.id,
       created_via: "salesman",
+      brand_id: brandId, // NEW: Save brand link
       notes: notes || "Order created by salesman",
     })
     .select()
@@ -500,4 +516,81 @@ export async function getSalesmanDashboardData(salesmanId: string) {
     },
     recentActivity: activity.activities || [],
   };
+}
+
+/**
+ * Get independent ledger details for a specific salesman and shop
+ */
+export async function getSalesmanShopLedger(salesmanId: string, shopId: string) {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  // Get ledgers (per brand)
+  const { data: ledgers, error } = await supabase
+    .from("salesman_shop_ledger")
+    .select(`
+      brand_id,
+      pending_amount,
+      total_sales,
+      total_collected,
+      brands (name, logo_url)
+    `)
+    .eq("salesman_id", salesmanId)
+    .eq("shop_id", shopId);
+
+  if (error) {
+    console.error("Error fetching ledgers:", error);
+    return { error: "Failed to fetch ledgers" };
+  }
+
+  // Aggregate total pending for this salesman
+  const totalInternalPending = ledgers?.reduce((sum, l) => sum + Number(l.pending_amount), 0) || 0;
+
+  return {
+    ledgers: ledgers || [],
+    totalInternalPending
+  };
+}
+
+/**
+ * Get products for a specific brand
+ */
+export async function getProductsForBrand(brandId: string) {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  const { data: products, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("brand_id", brandId)
+    .eq("is_active", true)
+    .order("name");
+
+  if (error) {
+    console.error("Error fetching products:", error);
+    return { error: "Failed to fetch products" };
+  }
+
+  return { products };
+}
+
+/**
+ * Get Ledger Reports for Admin
+ */
+export async function getShopLedgerReports() {
+    const supabase = createAdminClient();
+    if (!supabase) throw new Error("Admin client unavailable");
+    
+    // We can use the view created in migration
+    const { data, error } = await supabase
+        .from('shop_pending_summary')
+        .select('*')
+        .order('total_pending_used', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching ledger reports:", error);
+        return { error: error.message };
+    }
+
+    return { reports: data };
 }

@@ -33,6 +33,9 @@ export default async function Dashboard() {
   if (role === "sub_admin") {
     return redirect("/sub-admin");
   }
+  if (role === "salesman") {
+    return redirect("/salesman");
+  }
 
   return (
     <div className="min-h-screen bg-[#FDFCF9]">

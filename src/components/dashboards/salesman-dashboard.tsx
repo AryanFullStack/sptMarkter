@@ -30,6 +30,16 @@ export default function SalesmanDashboard() {
             setUser(user);
 
             if (user) {
+                const { data: profile } = await supabase
+                    .from("users")
+                    .select("*")
+                    .eq("id", user.id)
+                    .single();
+
+                if (profile) {
+                    setUser({ ...user, ...profile });
+                }
+
                 const dashboardData = await getSalesmanDashboardData(user.id);
                 setData(dashboardData);
             }
@@ -67,9 +77,9 @@ export default function SalesmanDashboard() {
                     <h1 className="font-serif text-3xl font-semibold text-[#1A1A1A]">Salesman Dashboard</h1>
                     <p className="text-[#6B6B6B]">Manage your clients and orders</p>
                 </div>
-                <Link href="/salesman/create-order">
+                <Link href="/salesman/shops">
                     <Button className="bg-[#D4AF37] hover:bg-[#C19B2E] text-white gap-2">
-                        <PlusCircle className="h-4 w-4" /> Create New Order
+                        <PlusCircle className="h-4 w-4" /> Find Shop & Create Order
                     </Button>
                 </Link>
             </div>
@@ -219,7 +229,17 @@ export default function SalesmanDashboard() {
 
                 <TabsContent value="profile">
                     <div className="max-w-2xl">
-                        {user && <ProfileForm user={user} />}
+                        {user && (
+                            <ProfileForm
+                                user={user}
+                                initialData={{
+                                    full_name: user.full_name || "",
+                                    phone: user.phone || "",
+                                    email: user.email || "",
+                                    role: user.role || ""
+                                }}
+                            />
+                        )}
                     </div>
                 </TabsContent>
             </Tabs>
