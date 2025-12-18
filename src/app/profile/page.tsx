@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import MainNav from "@/components/main-nav";
-import MainFooter from "@/components/main-footer";
+import { MainNav } from "@/components/main-nav";
+import { MainFooter } from "@/components/main-footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,7 +85,7 @@ export default function ProfilePage() {
       <MainNav />
       <main className="container mx-auto px-4 py-16 max-w-4xl">
         <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A] mb-8">My Profile</h1>
-        
+
         <div className="space-y-6">
           <Card>
             <CardHeader>

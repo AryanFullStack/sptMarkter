@@ -1,6 +1,6 @@
 import { MainNav } from "@/components/main-nav";
 import { MainFooter } from "@/components/main-footer";
-import { ProductCard } from "@/components/product-card";
+import { ProductGrid } from "@/components/product-grid";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles, Award, Truck, Shield } from "lucide-react";
 import Link from "next/link";
@@ -11,11 +11,16 @@ export default async function Home() {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Fetch featured products
-  const { data: products } = await supabase
+  const { data: products, error } = await supabase
     .from("products")
-    .select("*, brands(name), categories(name)")
-    .eq("is_active", true)
+    .select("*")
     .limit(8);
+
+  if (error) {
+    console.error("❌ Error fetching products:", error);
+  } else {
+    console.log("✅ Fetched products count:", products?.length || 0);
+  }
 
   return (
     <div className="min-h-screen bg-cream">
@@ -49,7 +54,7 @@ export default async function Home() {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-charcoal text-base px-8">
+              <Button asChild size="lg" variant="outline" className="border-white text-gold-dark hover:bg-white hover:text-charcoal text-base px-8">
                 <Link href="/about">Learn More</Link>
               </Button>
             </div>
@@ -153,27 +158,7 @@ export default async function Home() {
               <Link href="/store">View All</Link>
             </Button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {products?.slice(0, 8).map((product: any) => (
-              <ProductCard
-                key={product.id}
-                id={product.id}
-                name={product.name}
-                slug={product.slug}
-                price={product.customer_price}
-                image={product.images?.[0] || "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80"}
-                brand={product.brands?.name}
-                stockStatus={
-                  product.stock_quantity === 0
-                    ? "out_of_stock"
-                    : product.stock_quantity <= product.low_stock_threshold
-                    ? "low_stock"
-                    : "in_stock"
-                }
-                stockCount={product.stock_quantity}
-              />
-            ))}
-          </div>
+          <ProductGrid products={products?.slice(0, 8) || []} />
         </div>
       </section>
 

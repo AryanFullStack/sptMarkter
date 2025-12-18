@@ -1,308 +1,339 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/supabase/client";
-import DashboardNavbar from "@/components/dashboard-navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { Download, TrendingUp, Users, Package, DollarSign } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ExportButton } from "@/components/shared/export-button";
+import { formatCurrency } from "@/utils/export-utils";
+import { TrendingUp, DollarSign, Users, Package, Calendar } from "lucide-react";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 export default function ReportsPage() {
-  const [reportType, setReportType] = useState("sales");
+  const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState({
+    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0],
+  });
+
   const [salesData, setSalesData] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
-  const [creditReport, setCreditReport] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [creditData, setCreditData] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    totalRevenue: 0,
+    totalOrders: 0,
+    avgOrderValue: 0,
+    outstandingCredit: 0,
+    totalCustomers: 0,
+  });
+
   const supabase = createClient();
-  const router = useRouter();
 
   useEffect(() => {
-    checkAdmin();
     loadReports();
-  }, []);
-
-  async function checkAdmin() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push("/sign-in");
-      return;
-    }
-
-    const { data: userData } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (userData?.role !== "admin") {
-      router.push("/dashboard");
-    }
-  }
+  }, [dateRange]);
 
   async function loadReports() {
-    const { data: orders } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
+    setLoading(true);
 
-    const { data: users } = await supabase
-      .from("users")
-      .select("*")
-      .in("role", ["retailer", "beauty_parlor"]);
-
-    // Sales by month
-    const salesByMonth: any = {};
-    orders?.forEach(order => {
-      const month = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      if (!salesByMonth[month]) {
-        salesByMonth[month] = { month, sales: 0, orders: 0 };
-      }
-      salesByMonth[month].sales += Number(order.total_amount);
-      salesByMonth[month].orders += 1;
-    });
-    setSalesData(Object.values(salesByMonth).slice(-6));
-
-    // Top products (mock data - would need order_items join)
-    setTopProducts([
-      { name: "Hydrating Face Serum", sales: 45, revenue: 134955 },
-      { name: "Vitamin C Cream", sales: 38, revenue: 113962 },
-      { name: "Keratin Shampoo", sales: 52, revenue: 67548 },
-      { name: "HD Foundation", sales: 28, revenue: 89572 },
-      { name: "Makeup Brush Set", sales: 35, revenue: 90965 },
+    const [ordersData, usersData, productsData] = await Promise.all([
+      supabase
+        .from("orders")
+        .select("*")
+        .gte("created_at", dateRange.start)
+        .lte("created_at", dateRange.end)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("users")
+        .select("role, credit_limit, credit_used")
+        .in("role", ["retailer", "beauty_parlor"]),
+      supabase
+        .from("order_items")
+        .select("product_id, quantity, products(name)")
+        .gte("created_at", dateRange.start)
+        .lte("created_at", dateRange.end),
     ]);
 
-    // Credit report
-    const creditData = users?.map(user => ({
-      name: user.full_name || user.email,
-      email: user.email,
-      role: user.role,
-      credit_limit: user.credit_limit || 0,
-      credit_used: user.credit_used || 0,
-      credit_available: (user.credit_limit || 0) - (user.credit_used || 0),
-    })) || [];
-    setCreditReport(creditData);
+    const orders = ordersData.data || [];
+    const users = usersData.data || [];
+
+    // Calculate stats
+    const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+    const totalOrders = orders.length;
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const outstandingCredit = orders.reduce((sum, o) => sum + (Number(o.pending_amount) || 0), 0);
+
+    setStats({
+      totalRevenue,
+      totalOrders,
+      avgOrderValue,
+      outstandingCredit,
+      totalCustomers: users.length,
+    });
+
+    // Sales by day
+    const salesByDay: any = {};
+    orders.forEach(order => {
+      const date = new Date(order.created_at).toLocaleDateString();
+      if (!salesByDay[date]) {
+        salesByDay[date] = { date, revenue: 0, orders: 0 };
+      }
+      salesByDay[date].revenue += Number(order.total_amount);
+      salesByDay[date].orders += 1;
+    });
+    setSalesData(Object.values(salesByDay));
+
+    // Top products
+    const productSales: any = {};
+    (productsData.data || []).forEach((item: any) => {
+      const productName = item.products?.name || "Unknown";
+      if (!productSales[productName]) {
+        productSales[productName] = { name: productName, quantity: 0 };
+      }
+      productSales[productName].quantity += item.quantity;
+    });
+    const topProductsList = Object.values(productSales)
+      .sort((a: any, b: any) => b.quantity - a.quantity)
+      .slice(0, 10);
+    setTopProducts(topProductsList as any);
+
+    // Credit utilization by user
+    const creditByRole = users.reduce((acc: any, user) => {
+      const role = user.role === "retailer" ? "Retailers" : "Beauty Parlors";
+      if (!acc[role]) {
+        acc[role] = { name: role, total: 0, used: 0 };
+      }
+      acc[role].total += Number(user.credit_limit || 0);
+      acc[role].used += Number(user.credit_used || 0);
+      return acc;
+    }, {});
+    setCreditData(Object.values(creditByRole));
 
     setLoading(false);
   }
 
-  const COLORS = ['#D4AF37', '#C77D2E', '#2D5F3F', '#8B3A3A', '#6B6B6B'];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FDFCF9]">
-        <DashboardNavbar />
-        <div className="container mx-auto px-4 py-16">
-          <p className="text-center text-[#6B6B6B]">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#FDFCF9]">
-      <DashboardNavbar />
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A] mb-2">Reports & Analytics</h1>
-            <p className="text-[#6B6B6B]">View detailed reports and insights</p>
-          </div>
-          <Button className="bg-[#D4AF37] hover:bg-[#C19B2E] text-white">
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
-          </Button>
+    <div className="space-y-6">
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A]">
+            Reports & Analytics
+          </h1>
+          <p className="text-[#6B6B6B] mt-2">
+            Sales insights and performance metrics
+          </p>
         </div>
+        <ExportButton
+          data={[...salesData, ...topProducts]}
+          filename={`report-${dateRange.start}-to-${dateRange.end}`}
+        />
+      </div>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="font-serif text-2xl">Report Type</CardTitle>
+      {/* Date Range Filter */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Date Range
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
+              <Label>Start Date</Label>
+              <Input
+                type="date"
+                value={dateRange.start}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+              />
+            </div>
+            <div className="flex-1">
+              <Label>End Date</Label>
+              <Input
+                type="date"
+                value={dateRange.end}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+              />
+            </div>
+            <Button onClick={loadReports}>Update Report</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-[#6B6B6B]">
+              Total Revenue
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={reportType} onValueChange={setReportType}>
-              <SelectTrigger className="w-full md:w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sales">Sales Report</SelectItem>
-                <SelectItem value="products">Product Performance</SelectItem>
-                <SelectItem value="credit">Credit Report</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-[#2D5F3F]" />
+              <span className="text-2xl font-bold text-[#2D5F3F]">
+                {formatCurrency(stats.totalRevenue)}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
-        {reportType === "sales" && (
-          <>
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="font-serif text-2xl">Sales Overview (Last 6 Months)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F7F5F2" />
-                    <XAxis dataKey="month" stroke="#6B6B6B" />
-                    <YAxis stroke="#6B6B6B" />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="sales" fill="#D4AF37" name="Revenue (₹)" />
-                    <Bar dataKey="orders" fill="#C77D2E" name="Orders" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <div className="grid md:grid-cols-4 gap-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Revenue</CardTitle>
-                  <DollarSign className="h-4 w-4 text-[#D4AF37]" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-[#1A1A1A]">
-                    ₹{salesData.reduce((sum, d) => sum + d.sales, 0).toFixed(2)}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Orders</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-[#D4AF37]" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-[#1A1A1A]">
-                    {salesData.reduce((sum, d) => sum + d.orders, 0)}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-[#6B6B6B]">Avg Order Value</CardTitle>
-                  <DollarSign className="h-4 w-4 text-[#D4AF37]" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-[#1A1A1A]">
-                    ₹{(salesData.reduce((sum, d) => sum + d.sales, 0) / salesData.reduce((sum, d) => sum + d.orders, 0) || 0).toFixed(2)}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-[#6B6B6B]">Growth Rate</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-[#2D5F3F]" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-[#2D5F3F]">+12.5%</div>
-                </CardContent>
-              </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-[#6B6B6B]">
+              Total Orders
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-[#D4AF37]" />
+              <span className="text-2xl font-bold text-[#1A1A1A]">
+                {stats.totalOrders}
+              </span>
             </div>
-          </>
-        )}
+          </CardContent>
+        </Card>
 
-        {reportType === "products" && (
-          <>
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="font-serif text-2xl">Top Selling Products</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={topProducts} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F7F5F2" />
-                    <XAxis type="number" stroke="#6B6B6B" />
-                    <YAxis dataKey="name" type="category" stroke="#6B6B6B" width={150} />
-                    <Tooltip />
-                    <Bar dataKey="revenue" fill="#D4AF37" name="Revenue (₹)" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-[#6B6B6B]">
+              Avg Order Value
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-[#D4AF37]" />
+              <span className="text-2xl font-bold text-[#1A1A1A]">
+                {formatCurrency(stats.avgOrderValue)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-serif text-2xl">Product Performance Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product Name</TableHead>
-                      <TableHead>Units Sold</TableHead>
-                      <TableHead>Revenue</TableHead>
-                      <TableHead>Avg Price</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {topProducts.map((product, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{product.name}</TableCell>
-                        <TableCell>{product.sales}</TableCell>
-                        <TableCell>₹{product.revenue.toFixed(2)}</TableCell>
-                        <TableCell>₹{(product.revenue / product.sales).toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-[#6B6B6B]">
+              Outstanding Credit
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-[#C77D2E]" />
+              <span className="text-2xl font-bold text-[#C77D2E]">
+                {formatCurrency(stats.outstandingCredit)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
 
-        {reportType === "credit" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-serif text-2xl">Credit Report - Retailers & Beauty Parlors</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Credit Limit</TableHead>
-                    <TableHead>Credit Used</TableHead>
-                    <TableHead>Available</TableHead>
-                    <TableHead>Utilization</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {creditReport.map((user, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell className="capitalize">{user.role.replace("_", " ")}</TableCell>
-                      <TableCell>₹{user.credit_limit.toFixed(2)}</TableCell>
-                      <TableCell>₹{user.credit_used.toFixed(2)}</TableCell>
-                      <TableCell className="text-[#2D5F3F]">₹{user.credit_available.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="w-full bg-[#F7F5F2] rounded-full h-2">
-                            <div
-                              className="bg-[#D4AF37] h-2 rounded-full"
-                              style={{ width: `${user.credit_limit > 0 ? (user.credit_used / user.credit_limit) * 100 : 0}%` }}
-                            />
-                          </div>
-                          <span className="text-sm text-[#6B6B6B]">
-                            {user.credit_limit > 0 ? ((user.credit_used / user.credit_limit) * 100).toFixed(0) : 0}%
-                          </span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-      </main>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-[#6B6B6B]">
+              Credit Customers
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-[#D4AF37]" />
+              <span className="text-2xl font-bold text-[#1A1A1A]">
+                {stats.totalCustomers}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sales Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-serif text-2xl">Sales Trend</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="h-80 flex items-center justify-center text-[#6B6B6B]">
+              Loading chart...
+            </div>
+          ) : salesData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={salesData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F7F5F2" />
+                <XAxis dataKey="date" stroke="#6B6B6B" />
+                <YAxis stroke="#6B6B6B" />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="revenue" stroke="#D4AF37" strokeWidth={2} name="Revenue (₹)" />
+                <Line type="monotone" dataKey="orders" stroke="#2D5F3F" strokeWidth={2} name="Orders" />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-80 flex items-center justify-center text-[#6B6B6B]">
+              No data for selected period
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Top Products and Credit Usage */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Top Products */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-serif text-2xl">Top Selling Products</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {topProducts.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={topProducts}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F7F5F2" />
+                  <XAxis dataKey="name" stroke="#6B6B6B" />
+                  <YAxis stroke="#6B6B6B" />
+                  <Tooltip />
+                  <Bar dataKey="quantity" fill="#D4AF37" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-80 flex items-center justify-center text-[#6B6B6B]">
+                No product data available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Credit Utilization */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-serif text-2xl">Credit Utilization by Role</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {creditData.length > 0 ? (
+              <div className="space-y-4">
+                {creditData.map((item: any, index) => (
+                  <div key={index}>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="font-medium">{item.name}</span>
+                      <span>
+                        {formatCurrency(item.used)} / {formatCurrency(item.total)}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-[#E8E8E8] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#D4AF37]"
+                        style={{ width: `${(item.used / item.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-80 flex items-center justify-center text-[#6B6B6B]">
+                No credit data available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

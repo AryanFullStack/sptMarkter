@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { ProfileForm } from "@/components/dashboards/profile-form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function CustomerDashboard() {
   const [stats, setStats] = useState({
@@ -15,6 +17,8 @@ export default function CustomerDashboard() {
     savedAddresses: 0,
     notifications: 0,
   });
+  const [userData, setUserData] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
@@ -26,11 +30,13 @@ export default function CustomerDashboard() {
   async function loadDashboardData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    setUser(user);
 
-    const [ordersRes, wishlistRes, addressesRes] = await Promise.all([
+    const [ordersRes, wishlistRes, addressesRes, userRes] = await Promise.all([
       supabase.from("orders").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("wishlist").select("*", { count: "exact", head: true }).eq("user_id", user.id),
       supabase.from("addresses").select("*", { count: "exact", head: true }).eq("user_id", user.id),
+      supabase.from("users").select("*").eq("id", user.id).single(),
     ]);
 
     setStats({
@@ -40,6 +46,7 @@ export default function CustomerDashboard() {
       notifications: 0,
     });
 
+    setUserData(userRes.data);
     setRecentOrders(ordersRes.data?.slice(0, 5) || []);
     setLoading(false);
   }
@@ -69,91 +76,106 @@ export default function CustomerDashboard() {
         <p className="text-[#6B6B6B]">Manage your orders and account</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#6B6B6B]">My Orders</CardTitle>
-            <Package className="h-4 w-4 text-[#D4AF37]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#1A1A1A]">{stats.totalOrders}</div>
-            <p className="text-xs text-[#6B6B6B] mt-1">Total orders</p>
-            <Link href="/orders">
-              <Button variant="link" className="px-0 text-[#D4AF37] mt-2">View all orders</Button>
-            </Link>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="profile">Profile & Settings</TabsTrigger>
+        </TabsList>
 
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#6B6B6B]">Wishlist</CardTitle>
-            <Heart className="h-4 w-4 text-[#D4AF37]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#1A1A1A]">{stats.wishlistItems}</div>
-            <p className="text-xs text-[#6B6B6B] mt-1">Saved items</p>
-          </CardContent>
-        </Card>
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#6B6B6B]">My Orders</CardTitle>
+                <Package className="h-4 w-4 text-[#D4AF37]" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#1A1A1A]">{stats.totalOrders}</div>
+                <p className="text-xs text-[#6B6B6B] mt-1">Total orders</p>
+                <Link href="/orders">
+                  <Button variant="link" className="px-0 text-[#D4AF37] mt-2">View all orders</Button>
+                </Link>
+              </CardContent>
+            </Card>
 
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#6B6B6B]">Addresses</CardTitle>
-            <MapPin className="h-4 w-4 text-[#D4AF37]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#1A1A1A]">{stats.savedAddresses}</div>
-            <p className="text-xs text-[#6B6B6B] mt-1">Saved addresses</p>
-            <Link href="/profile">
-              <Button variant="link" className="px-0 text-[#D4AF37] mt-2">Manage addresses</Button>
-            </Link>
-          </CardContent>
-        </Card>
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Wishlist</CardTitle>
+                <Heart className="h-4 w-4 text-[#D4AF37]" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#1A1A1A]">{stats.wishlistItems}</div>
+                <p className="text-xs text-[#6B6B6B] mt-1">Saved items</p>
+              </CardContent>
+            </Card>
 
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#6B6B6B]">Notifications</CardTitle>
-            <Bell className="h-4 w-4 text-[#D4AF37]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#1A1A1A]">{stats.notifications}</div>
-            <p className="text-xs text-[#6B6B6B] mt-1">Unread messages</p>
-          </CardContent>
-        </Card>
-      </div>
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Addresses</CardTitle>
+                <MapPin className="h-4 w-4 text-[#D4AF37]" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#1A1A1A]">{stats.savedAddresses}</div>
+                <p className="text-xs text-[#6B6B6B] mt-1">Saved addresses</p>
+                <Link href="/addresses">
+                  <Button variant="link" className="px-0 text-[#D4AF37] mt-2">Manage addresses</Button>
+                </Link>
+              </CardContent>
+            </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-serif text-2xl">Recent Orders</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {recentOrders.length === 0 ? (
-            <div className="text-center py-12 text-[#6B6B6B]">
-              <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="mb-4">No orders yet</p>
-              <Link href="/store">
-                <Button className="bg-[#D4AF37] hover:bg-[#C19B2E] text-white">
-                  Start Shopping
-                </Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {recentOrders.map((order) => (
-                <div key={order.id} className="flex justify-between items-center border-b border-[#F7F5F2] pb-4">
-                  <div>
-                    <p className="font-mono text-sm text-[#6B6B6B]">#{order.order_number}</p>
-                    <p className="text-sm text-[#6B6B6B]">{new Date(order.created_at).toLocaleDateString()}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-[#1A1A1A]">₹{order.total_amount.toFixed(2)}</p>
-                    <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                  </div>
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Notifications</CardTitle>
+                <Bell className="h-4 w-4 text-[#D4AF37]" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#1A1A1A]">{stats.notifications}</div>
+                <p className="text-xs text-[#6B6B6B] mt-1">Unread messages</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-serif text-2xl">Recent Orders</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentOrders.length === 0 ? (
+                <div className="text-center py-12 text-[#6B6B6B]">
+                  <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="mb-4">No orders yet</p>
+                  <Link href="/store">
+                    <Button className="bg-[#D4AF37] hover:bg-[#C19B2E] text-white">
+                      Start Shopping
+                    </Button>
+                  </Link>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ) : (
+                <div className="space-y-4">
+                  {recentOrders.map((order) => (
+                    <div key={order.id} className="flex justify-between items-center border-b border-[#F7F5F2] pb-4">
+                      <div>
+                        <p className="font-mono text-sm text-[#6B6B6B]">#{order.order_number}</p>
+                        <p className="text-sm text-[#6B6B6B]">{new Date(order.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-[#1A1A1A]">₹{order.total_amount.toFixed(2)}</p>
+                        <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="profile">
+          <div className="max-w-2xl">
+            {userData && <ProfileForm user={user} initialData={userData} />}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

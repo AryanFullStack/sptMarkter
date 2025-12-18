@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS addresses (
     address_line1 text NOT NULL,
     address_line2 text,
     city text NOT NULL,
-    state text NOT NULL,
+    state text, -- Made nullable since UI doesn't collect this field
     postal_code text NOT NULL,
     country text DEFAULT 'Pakistan',
     is_default boolean DEFAULT false,

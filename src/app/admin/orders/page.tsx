@@ -12,8 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Eye, DollarSign, User } from "lucide-react";
+import { loadAdminOrdersAction, updateOrderStatusAction } from "@/app/admin/actions";
+import { useToast } from "@/hooks/use-toast";
 
 export default function OrdersManagementPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -27,8 +30,10 @@ export default function OrdersManagementPage() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [paymentNotes, setPaymentNotes] = useState("");
+  const [statusToUpdate, setStatusToUpdate] = useState("");
   const supabase = createClient();
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     checkAdmin();
@@ -58,31 +63,17 @@ export default function OrdersManagementPage() {
   }
 
   async function loadOrders() {
-    const { data } = await supabase
-      .from("orders")
-      .select(`
-        *,
-        users (
-          email,
-          full_name,
-          role
-        ),
-        addresses (
-          full_name,
-          phone,
-          address_line1,
-          city,
-          state
-        )
-      `)
-      .order("created_at", { ascending: false });
-
-    if (data) {
-      setOrders(data);
-      setFilteredOrders(data);
+    try {
+      const data = await loadAdminOrdersAction();
+      setOrders(data || []);
+      setFilteredOrders(data || []);
+    } catch (error) {
+      console.error("Failed to load orders:", error);
     }
     setLoading(false);
   }
+
+
 
   function filterOrders() {
     let filtered = orders;
@@ -102,12 +93,23 @@ export default function OrdersManagementPage() {
   }
 
   async function updateOrderStatus(orderId: string, newStatus: string) {
-    await supabase
-      .from("orders")
-      .update({ status: newStatus })
-      .eq("id", orderId);
+    if (!newStatus) return;
+    try {
+      await updateOrderStatusAction(orderId, newStatus);
 
-    loadOrders();
+      const updated = orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
+      setOrders(updated);
+      // Re-apply filter? Simplified: just update filtered list too if it contains it
+      setFilteredOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+      }
+      toast({ title: "Status Updated", description: `Order status changed to ${newStatus}` });
+    } catch (error) {
+      console.error("Update failed", error);
+      toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
+    }
   }
 
   async function recordPayment() {
@@ -208,6 +210,7 @@ export default function OrdersManagementPage() {
                   <TableRow>
                     <TableHead>Order #</TableHead>
                     <TableHead>Customer</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Paid</TableHead>
@@ -226,6 +229,9 @@ export default function OrdersManagementPage() {
                           <p className="text-sm text-[#6B6B6B]">{order.users?.email}</p>
                         </div>
                       </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">{order.users?.role?.replace("_", " ") || "N/A"}</Badge>
+                      </TableCell>
                       <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
                       <TableCell>₹{order.total_amount?.toFixed(2)}</TableCell>
                       <TableCell>₹{order.paid_amount?.toFixed(2)}</TableCell>
@@ -242,6 +248,7 @@ export default function OrdersManagementPage() {
                             variant="outline"
                             onClick={() => {
                               setSelectedOrder(order);
+                              setStatusToUpdate(order.status);
                               setIsDetailOpen(true);
                             }}
                           >
@@ -283,23 +290,29 @@ export default function OrdersManagementPage() {
                     <Label>Order Number</Label>
                     <p className="font-mono text-lg">{selectedOrder.order_number}</p>
                   </div>
+
                   <div>
-                    <Label>Status</Label>
-                    <Select
-                      value={selectedOrder.status}
-                      onValueChange={(value) => updateOrderStatus(selectedOrder.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="processing">Processing</SelectItem>
-                        <SelectItem value="shipped">Shipped</SelectItem>
-                        <SelectItem value="delivered">Delivered</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label className="mb-2 block">Status Update</Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={statusToUpdate}
+                        onValueChange={setStatusToUpdate}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="processing">Processing</SelectItem>
+                          <SelectItem value="shipped">Shipped</SelectItem>
+                          <SelectItem value="delivered">Delivered</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button onClick={() => updateOrderStatus(selectedOrder.id, statusToUpdate)}>
+                        Update
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -309,15 +322,44 @@ export default function OrdersManagementPage() {
                 </div>
                 <div>
                   <Label>Shipping Address</Label>
-                  {selectedOrder.addresses && (
+                  {selectedOrder.shipping_address && (
                     <div className="text-sm">
-                      <p>{selectedOrder.addresses.full_name}</p>
-                      <p>{selectedOrder.addresses.address_line1}</p>
-                      <p>{selectedOrder.addresses.city}, {selectedOrder.addresses.state}</p>
-                      <p>{selectedOrder.addresses.phone}</p>
+                      <p>{selectedOrder.shipping_address.full_name}</p>
+                      <p>{selectedOrder.shipping_address.address_line1}</p>
+                      <p>{selectedOrder.shipping_address.city}, {selectedOrder.shipping_address.state}</p>
+                      <p>{selectedOrder.shipping_address.phone}</p>
                     </div>
                   )}
+
                 </div>
+
+                {/* Order Items List */}
+                <div>
+                  <Label className="mb-2 block">Order Items</Label>
+                  <div className="space-y-3 border rounded-lg p-3 bg-gray-50 max-h-48 overflow-y-auto">
+                    {(() => {
+                      const displayItems = selectedOrder.order_items_data || selectedOrder.items || [];
+                      if (displayItems.length === 0) {
+                        return <p className="text-gray-500 italic">No items found.</p>;
+                      }
+                      return displayItems.map((item: any, idx: number) => {
+                        const name = item.product?.name || item.name || "Unknown Product";
+                        const price = item.price || 0;
+                        const qty = item.quantity || 1;
+                        return (
+                          <div key={item.id || idx} className="flex justify-between items-start text-sm">
+                            <div className="flex gap-2">
+                              <span className="font-semibold w-6 text-center">{qty}x</span>
+                              <span className="text-gray-700">{name}</span>
+                            </div>
+                            <span className="font-medium">₹{(price * qty).toFixed(2)}</span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+
                 <div className="grid md:grid-cols-3 gap-4">
                   <div>
                     <Label>Total Amount</Label>

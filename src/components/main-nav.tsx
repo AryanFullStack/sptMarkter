@@ -1,206 +1,193 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { Logo } from "./logo";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import {
-  Search,
-  ShoppingCart,
-  User,
-  Menu,
-  X,
-  Heart,
-  Package,
-  LogOut,
-} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { ThemeSwitcher } from "./theme-switcher";
+import { User, ShoppingCart, Heart, Menu, X, LogOut, Package, Home } from "lucide-react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/supabase/client";
+import { useCart } from "@/context/cart-context";
+import { useWishlist } from "@/context/wishlist-context";
+import { Badge } from "./ui/badge";
 
 export function MainNav() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const supabase = createClient();
+  const { getCartCount } = useCart();
+  const { items: wishlistItems } = useWishlist();
+
+  const cartCount = getCartCount();
+  const wishlistCount = wishlistItems.length;
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/";
+  };
+
+  const routes = [
+    {
+      href: "/",
+      label: "Home",
+      active: pathname === "/",
+    },
+    {
+      href: "/store",
+      label: "Store",
+      active: pathname === "/store",
+    },
+    {
+      href: "/about",
+      label: "About Us",
+      active: pathname === "/about",
+    },
+    {
+      href: "/contact",
+      label: "Contact",
+      active: pathname === "/contact",
+    },
+  ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-charcoal/10 bg-cream/95 backdrop-blur supports-[backdrop-filter]:bg-cream/80">
+    <nav className="border-b bg-white sticky top-0 z-50">
       <div className="container mx-auto px-4">
-        <div className="flex h-20 items-center justify-between">
+        <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Logo />
-
-          {/* Desktop Search */}
-          <div className="hidden flex-1 max-w-xl mx-8 lg:block">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-charcoal-light" />
-              <Input
-                type="search"
-                placeholder="Search for products, brands..."
-                className="pl-10 bg-white border-charcoal/20 focus:border-gold"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
+          <Link href="/" className="font-display text-2xl font-bold text-[#1A1A1A]">
+            <span className="text-[#D4AF37]">S</span>pectrum
+          </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-6">
-            <Link
-              href="/store"
-              className="text-sm font-medium text-charcoal hover:text-gold transition-colors"
-            >
-              Store
-            </Link>
-            <Link
-              href="/brands"
-              className="text-sm font-medium text-charcoal hover:text-gold transition-colors"
-            >
-              Brands
-            </Link>
-            <Link
-              href="/about"
-              className="text-sm font-medium text-charcoal hover:text-gold transition-colors"
-            >
-              About
-            </Link>
-            <Link
-              href="/contact"
-              className="text-sm font-medium text-charcoal hover:text-gold transition-colors"
-            >
-              Contact
-            </Link>
-          </nav>
+          <div className="hidden md:flex items-center gap-6">
+            {routes.map((route) => (
+              <Link
+                key={route.href}
+                href={route.href}
+                className={cn(
+                  "text-sm font-medium transition-colors hover:text-[#D4AF37]",
+                  route.active ? "text-[#1A1A1A]" : "text-gray-500"
+                )}
+              >
+                {route.label}
+              </Link>
+            ))}
+          </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-3">
-            <ThemeSwitcher />
-            
+          <div className="flex items-center gap-4">
+            {/* Wishlist */}
+            <Link href="/wishlist">
+              <Button variant="ghost" size="icon" className="relative text-gray-700">
+                <Heart className="h-5 w-5" />
+                {wishlistCount > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-[#D4AF37] text-white rounded-full text-xs">
+                    {wishlistCount}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
+
+            {/* Cart */}
+            <Link href="/cart">
+              <Button variant="ghost" size="icon" className="relative text-gray-700">
+                <ShoppingCart className="h-5 w-5" />
+                {cartCount > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-[#D4AF37] text-white rounded-full text-xs">
+                    {cartCount}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
+
+            {/* Auth Menu */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-gray-700">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard" className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4" />
+                      Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/orders" className="cursor-pointer">
+                      <Package className="mr-2 h-4 w-4" />
+                      My Orders
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/addresses" className="cursor-pointer">
+                      <Home className="mr-2 h-4 w-4" />
+                      Addresses
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="text-red-600 cursor-pointer">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button asChild className="bg-[#1A1A1A] text-white hover:bg-[#333333]">
+                <Link href="/sign-in">Sign In</Link>
+              </Button>
+            )}
+
+            {/* Mobile Menu Toggle */}
             <Button
               variant="ghost"
               size="icon"
-              className="relative hover:bg-gold/10"
+              className="md:hidden text-gray-700"
+              onClick={() => setIsOpen(!isOpen)}
             >
-              <Heart className="h-5 w-5" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative hover:bg-gold/10"
-            >
-              <ShoppingCart className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-gold text-white text-xs flex items-center justify-center font-medium">
-                0
-              </span>
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="hover:bg-gold/10">
-                  <User className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem asChild>
-                  <Link href="/sign-in" className="cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />
-                    Sign In
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/sign-up" className="cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />
-                    Sign Up
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard" className="cursor-pointer">
-                    <Package className="mr-2 h-4 w-4" />
-                    My Orders
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard" className="cursor-pointer">
-                    <Heart className="mr-2 h-4 w-4" />
-                    Wishlist
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Mobile Menu Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
+              {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </Button>
           </div>
         </div>
 
-        {/* Mobile Search */}
-        <div className="pb-4 lg:hidden">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-charcoal-light" />
-            <Input
-              type="search"
-              placeholder="Search products..."
-              className="pl-10 bg-white border-charcoal/20"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        {/* Mobile Navigation */}
+        {isOpen && (
+          <div className="md:hidden py-4 border-t space-y-4">
+            {routes.map((route) => (
+              <Link
+                key={route.href}
+                href={route.href}
+                className={cn(
+                  "block text-sm font-medium transition-colors hover:text-[#D4AF37]",
+                  route.active ? "text-[#1A1A1A]" : "text-gray-500"
+                )}
+                onClick={() => setIsOpen(false)}
+              >
+                {route.label}
+              </Link>
+            ))}
           </div>
-        </div>
+        )}
       </div>
-
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-charcoal/10 bg-cream">
-          <nav className="container mx-auto px-4 py-6 flex flex-col gap-4">
-            <Link
-              href="/store"
-              className="text-base font-medium text-charcoal hover:text-gold transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Store
-            </Link>
-            <Link
-              href="/brands"
-              className="text-base font-medium text-charcoal hover:text-gold transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Brands
-            </Link>
-            <Link
-              href="/about"
-              className="text-base font-medium text-charcoal hover:text-gold transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              About
-            </Link>
-            <Link
-              href="/contact"
-              className="text-base font-medium text-charcoal hover:text-gold transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Contact
-            </Link>
-          </nav>
-        </div>
-      )}
-    </header>
+    </nav>
   );
 }

@@ -133,6 +133,81 @@ export default async function Signup(props: {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="address_line1" className="text-sm font-medium">
+                    Address
+                  </Label>
+                  <Input
+                    id="address_line1"
+                    name="address_line1"
+                    type="text"
+                    placeholder="Street Address, Shop Number"
+                    required
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city" className="text-sm font-medium">
+                      City
+                    </Label>
+                    <Input
+                      id="city"
+                      name="city"
+                      type="text"
+                      placeholder="City"
+                      required
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="postal_code" className="text-sm font-medium">
+                      Postal Code
+                    </Label>
+                    <Input
+                      id="postal_code"
+                      name="postal_code"
+                      type="text"
+                      placeholder="Zip Code"
+                      required
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="state" className="text-sm font-medium">
+                      State/Province
+                    </Label>
+                    <Input
+                      id="state"
+                      name="state"
+                      type="text"
+                      placeholder="State"
+                      required
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="address_type" className="text-sm font-medium">
+                      Address Type
+                    </Label>
+                    <Select name="address_type" defaultValue="home">
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="home">Home</SelectItem>
+                        <SelectItem value="office">Office</SelectItem>
+                        <SelectItem value="shop">Shop</SelectItem>
+                        <SelectItem value="beauty_parlor">Beauty Parlor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="password" className="text-sm font-medium">
                     Password
                   </Label>

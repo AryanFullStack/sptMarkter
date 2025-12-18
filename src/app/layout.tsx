@@ -3,6 +3,10 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { TempoInit } from "@/components/tempo-init";
 import { ThemeProvider } from "@/components/theme-provider";
+import { CartProvider } from "@/context/cart-context";
+import { WishlistProvider } from "@/context/wishlist-context";
+import { AddressProvider } from "@/context/address-context";
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,7 +29,14 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <CartProvider>
+            <WishlistProvider>
+              <AddressProvider>
+                {children}
+                <Toaster />
+              </AddressProvider>
+            </WishlistProvider>
+          </CartProvider>
         </ThemeProvider>
         <TempoInit />
       </body>

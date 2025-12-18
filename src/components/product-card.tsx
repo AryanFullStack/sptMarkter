@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, ShoppingCart } from "lucide-react";
+import { Heart, ShoppingCart, Zap } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ interface ProductCardProps {
   isWishlisted?: boolean;
   onAddToCart?: () => void;
   onToggleWishlist?: () => void;
+  onBuyNow?: () => void;
 }
 
 export function ProductCard({
@@ -36,6 +37,7 @@ export function ProductCard({
   isWishlisted = false,
   onAddToCart,
   onToggleWishlist,
+  onBuyNow,
 }: ProductCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -43,7 +45,10 @@ export function ProductCard({
     <div className="group relative bg-white rounded-lg border border-charcoal/10 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
       {/* Wishlist Button */}
       <button
-        onClick={onToggleWishlist}
+        onClick={(e) => {
+          e.preventDefault();
+          onToggleWishlist?.();
+        }}
         className="absolute top-3 right-3 z-10 h-9 w-9 rounded-full bg-white/90 backdrop-blur flex items-center justify-center transition-all hover:bg-gold hover:text-white"
       >
         <Heart
@@ -69,7 +74,7 @@ export function ProductCard({
           )}
           onLoad={() => setImageLoaded(true)}
         />
-        
+
         {/* Stock Badge */}
         {stockStatus === "low_stock" && (
           <Badge className="absolute top-3 left-3 bg-warning text-white">
@@ -90,7 +95,7 @@ export function ProductCard({
             {brand}
           </p>
         )}
-        
+
         <Link href={`/products/${slug}`}>
           <h3 className="font-display text-base font-semibold text-charcoal line-clamp-2 group-hover:text-gold transition-colors">
             {name}
@@ -108,15 +113,32 @@ export function ProductCard({
           )}
         </div>
 
-        {/* Add to Cart Button */}
-        <Button
-          onClick={onAddToCart}
-          disabled={stockStatus === "out_of_stock"}
-          className="w-full bg-charcoal hover:bg-gold text-white transition-colors"
-        >
-          <ShoppingCart className="h-4 w-4 mr-2" />
-          {stockStatus === "out_of_stock" ? "Out of Stock" : "Add to Cart"}
-        </Button>
+        {/* Actions */}
+        <div className="flex gap-2">
+          <Button
+            onClick={(e) => {
+              e.preventDefault();
+              onAddToCart?.();
+            }}
+            disabled={stockStatus === "out_of_stock"}
+            className="flex-1 bg-charcoal hover:bg-gold text-white transition-colors"
+          >
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Add
+          </Button>
+          <Button
+            onClick={(e) => {
+              e.preventDefault();
+              onBuyNow?.();
+            }}
+            disabled={stockStatus === "out_of_stock"}
+            variant="outline"
+            className="flex-1 border-gold text-gold hover:bg-gold hover:text-white"
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            Buy
+          </Button>
+        </div>
       </div>
     </div>
   );

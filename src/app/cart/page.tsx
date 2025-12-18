@@ -1,93 +1,74 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import MainNav from "@/components/main-nav";
-import MainFooter from "@/components/main-footer";
+import { useCart } from "@/context/cart-context";
+import { createClient } from "@/supabase/client";
+import { MainNav } from "@/components/main-nav";
+import { MainFooter } from "@/components/main-footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Plus, Minus } from "lucide-react";
+import { ShoppingCart, Minus, Plus, Trash2, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { createClient } from "@/supabase/client";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 export default function CartPage() {
-  const [cartItems, setCartItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items, removeFromCart, updateQuantity, getCartTotal, clearCart } = useCart();
   const [couponCode, setCouponCode] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
-    loadCart();
+    async function getUserRole() {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: userData } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+
+        setUserRole(userData?.role || null);
+      }
+    }
+
+    getUserRole();
   }, []);
 
-  async function loadCart() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setLoading(false);
-      return;
+  const handleApplyCoupon = () => {
+    // Placeholder for coupon logic
+    if (couponCode.toUpperCase() === "SAVE10") {
+      setDiscount(getCartTotal() * 0.1);
+    } else {
+      alert("Invalid coupon code");
     }
+  };
 
-    const { data: userData } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+  const subtotal = getCartTotal();
+  const tax = subtotal * 0.05; // 5% tax
+  const shipping = subtotal > 5000 ? 0 : 200; // Free shipping above 5000
+  const total = subtotal - discount + tax + shipping;
 
-    const { data: cart } = await supabase
-      .from("cart")
-      .select(`
-        id,
-        quantity,
-        product_id,
-        products (
-          id,
-          name,
-          slug,
-          images,
-          price_customer,
-          price_retailer,
-          price_beauty_parlor,
-          stock_quantity
-        )
-      `)
-      .eq("user_id", user.id);
-
-    if (cart) {
-      const items = cart.map((item: any) => ({
-        ...item,
-        price: userData?.role === "retailer" 
-          ? item.products.price_retailer 
-          : userData?.role === "beauty_parlor"
-          ? item.products.price_beauty_parlor
-          : item.products.price_customer
-      }));
-      setCartItems(items);
-    }
-    setLoading(false);
-  }
-
-  async function updateQuantity(cartId: string, newQuantity: number) {
-    if (newQuantity < 1) return;
-    await supabase
-      .from("cart")
-      .update({ quantity: newQuantity })
-      .eq("id", cartId);
-    loadCart();
-  }
-
-  async function removeItem(cartId: string) {
-    await supabase.from("cart").delete().eq("id", cartId);
-    loadCart();
-  }
-
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-  if (loading) {
+  if (items.length === 0) {
     return (
       <div className="min-h-screen bg-[#FDFCF9]">
         <MainNav />
         <div className="container mx-auto px-4 py-16">
-          <p className="text-center text-[#6B6B6B]">Loading cart...</p>
+          <div className="max-w-2xl mx-auto text-center">
+            <ShoppingCart className="h-24 w-24 text-gray-300 mx-auto mb-6" />
+            <h1 className="font-display text-3xl font-bold text-[#1A1A1A] mb-4">
+              Your Cart is Empty
+            </h1>
+            <p className="text-gray-600 mb-8">
+              Start adding some amazing beauty products to your cart!
+            </p>
+            <Button asChild className="bg-[#D4AF37] hover:bg-[#B8941F]">
+              <Link href="/store">Start Shopping</Link>
+            </Button>
+          </div>
         </div>
         <MainFooter />
       </div>
@@ -97,103 +78,165 @@ export default function CartPage() {
   return (
     <div className="min-h-screen bg-[#FDFCF9]">
       <MainNav />
-      <main className="container mx-auto px-4 py-16">
-        <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A] mb-8">Shopping Cart</h1>
-        
-        {cartItems.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-[#6B6B6B] text-lg mb-6">Your cart is empty</p>
-            <Link href="/store">
-              <Button className="bg-[#D4AF37] hover:bg-[#C19B2E] text-white">
-                Continue Shopping
-              </Button>
-            </Link>
-          </div>
-        ) : (
-          <div className="grid lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-4">
-              {cartItems.map((item) => (
-                <div key={item.id} className="bg-white rounded-lg shadow-sm p-6 flex gap-4">
-                  <div className="w-24 h-24 relative flex-shrink-0">
+
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="font-display text-4xl font-bold text-[#1A1A1A] mb-8">
+          Shopping Cart ({items.length} items)
+        </h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Cart Items */}
+          <div className="lg:col-span-2 space-y-4">
+            {items.map((item) => (
+              <div
+                key={item.product_id}
+                className="bg-white rounded-lg p-6 flex gap-6 shadow-sm"
+              >
+                {/* Product Image */}
+                <Link href={`/products/${item.slug}`} className="flex-shrink-0">
+                  <div className="relative w-24 h-24 rounded-lg overflow-hidden">
                     <Image
-                      src={item.products.images[0] || "/placeholder.png"}
-                      alt={item.products.name}
+                      src={item.image || "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80"}
+                      alt={item.name}
                       fill
-                      className="object-cover rounded"
+                      className="object-cover"
                     />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-[#1A1A1A] mb-2">{item.products.name}</h3>
-                    <p className="text-[#D4AF37] font-semibold mb-4">₹{item.price.toFixed(2)}</p>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center border border-[#6B6B6B] rounded">
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="p-2 hover:bg-[#F7F5F2]"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="px-4 py-2 border-x border-[#6B6B6B]">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="p-2 hover:bg-[#F7F5F2]"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => removeItem(item.id)}
-                        className="text-[#8B3A3A] hover:text-[#6B2A2A]"
+                </Link>
+
+                {/* Product Details */}
+                <div className="flex-1">
+                  <Link href={`/products/${item.slug}`}>
+                    <h3 className="font-semibold text-lg hover:text-[#D4AF37] transition-colors">
+                      {item.name}
+                    </h3>
+                  </Link>
+                  <p className="text-[#D4AF37] font-bold text-xl mt-2">
+                    Rs. {item.price ? item.price.toLocaleString() : '0'}
+                  </p>
+
+                  <div className="flex items-center gap-4 mt-4">
+                    {/* Quantity Controls */}
+                    <div className="flex items-center border rounded-lg">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
+                        disabled={item.quantity <= 1}
+                        className="h-10 w-10"
                       >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <span className="w-12 text-center font-medium">{item.quantity}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
+                        disabled={item.quantity >= item.stock_quantity}
+                        className="h-10 w-10"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
                     </div>
+
+                    {/* Remove Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeFromCart(item.product_id)}
+                      className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Remove
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-            
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-lg shadow-sm p-6 sticky top-4">
-                <h2 className="font-serif text-2xl font-semibold text-[#1A1A1A] mb-6">Order Summary</h2>
-                
-                <div className="space-y-4 mb-6">
-                  <div className="flex justify-between text-[#6B6B6B]">
-                    <span>Subtotal</span>
-                    <span>₹{subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-[#6B6B6B]">
-                    <span>Shipping</span>
-                    <span>Calculated at checkout</span>
-                  </div>
-                  <div className="border-t border-[#F7F5F2] pt-4">
-                    <div className="flex justify-between font-semibold text-[#1A1A1A] text-lg">
-                      <span>Total</span>
-                      <span>₹{subtotal.toFixed(2)}</span>
-                    </div>
-                  </div>
+
+                {/* Subtotal */}
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Subtotal</p>
+                  <p className="font-bold text-xl">
+                    Rs. {((item.price || 0) * item.quantity).toLocaleString()}
+                  </p>
                 </div>
-                
-                <div className="mb-4">
+              </div>
+            ))}
+          </div>
+
+          {/* Order Summary */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg p-6 shadow-sm sticky top-4">
+              <h2 className="font-display text-2xl font-bold mb-6">Order Summary</h2>
+
+              {/* Coupon Code */}
+              <div className="mb-6">
+                <label className="text-sm font-medium mb-2 block">Apply Coupon</label>
+                <div className="flex gap-2">
                   <Input
-                    placeholder="Coupon code"
+                    placeholder="Enter coupon code"
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value)}
-                    className="mb-2"
                   />
-                  <Button variant="outline" className="w-full">Apply Coupon</Button>
-                </div>
-                
-                <Link href="/checkout">
-                  <Button className="w-full bg-[#D4AF37] hover:bg-[#C19B2E] text-white">
-                    Proceed to Checkout
+                  <Button onClick={handleApplyCoupon} variant="outline">
+                    Apply
                   </Button>
-                </Link>
+                </div>
               </div>
+
+              {/* Price Breakdown */}
+              <div className="space-y-3 border-t pt-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="font-medium">Rs. {subtotal.toLocaleString()}</span>
+                </div>
+
+                {discount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount</span>
+                    <span>-Rs. {discount.toLocaleString()}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Tax (5%)</span>
+                  <span className="font-medium">Rs. {tax.toLocaleString()}</span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Shipping</span>
+                  <span className="font-medium">
+                    {shipping === 0 ? "FREE" : `Rs. ${shipping}`}
+                  </span>
+                </div>
+
+                <div className="border-t pt-3 flex justify-between text-lg font-bold">
+                  <span>Total</span>
+                  <span className="text-[#D4AF37]">Rs. {total.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Checkout Button */}
+              <Button
+                className="w-full mt-6 bg-[#D4AF37] hover:bg-[#B8941F] text-white"
+                size="lg"
+                onClick={() => router.push("/checkout")}
+              >
+                Proceed to Checkout
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full mt-3"
+                asChild
+              >
+                <Link href="/store">Continue Shopping</Link>
+              </Button>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      </div>
+
       <MainFooter />
     </div>
   );

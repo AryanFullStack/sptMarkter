@@ -2,221 +2,318 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/supabase/client";
-import { Package, CreditCard, TrendingUp, AlertCircle, ShoppingBag } from "lucide-react";
+import { Package, DollarSign, TrendingUp, ShoppingBag, Clock, Tag, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
+import { ProfileForm } from "@/components/dashboards/profile-form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getRetailerDashboardData } from "@/app/actions/retailer-actions";
+import { recordPartialPayment } from "@/app/actions/salesman-actions";
+import { getPendingLimitInfo } from "@/app/actions/pending-limit-actions";
+import { useToast } from "@/hooks/use-toast";
+import { FinancialSummaryCard } from "@/components/shared/financial-summary-card";
+import { PaymentTimeline } from "@/components/shared/payment-timeline";
+import { PendingLimitWarning } from "@/components/shared/pending-limit-warning";
+import { OrderCardEnhanced } from "@/components/shared/order-card-enhanced";
+import { PaymentRecordModal } from "@/components/shared/payment-record-modal";
 
 export default function ParlorDashboard() {
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    creditLimit: 0,
-    creditUsed: 0,
-    totalSpent: 0,
-    pendingPayments: 0,
-  });
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [pendingInfo, setPendingInfo] = useState<any>(null);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+
   const supabase = createClient();
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadDashboardData();
+    loadData();
   }, []);
 
-  async function loadDashboardData() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  async function loadData() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
 
-    const { data: userData } = await supabase
-      .from("users")
-      .select("credit_limit, credit_used")
-      .eq("id", user.id)
-      .single();
+      if (user) {
+        const [dashboardData, limitInfo] = await Promise.all([
+          getRetailerDashboardData(), // Reusing same action since data structure is same
+          getPendingLimitInfo(user.id)
+        ]);
 
-    const { data: orders } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    const totalSpent = orders?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
-    const pendingPayments = orders?.reduce((sum, order) => sum + (Number(order.total_amount) - Number(order.paid_amount)), 0) || 0;
-
-    setStats({
-      totalOrders: orders?.length || 0,
-      creditLimit: userData?.credit_limit || 0,
-      creditUsed: userData?.credit_used || 0,
-      totalSpent,
-      pendingPayments,
-    });
-
-    setRecentOrders(orders?.slice(0, 5) || []);
+        setData(dashboardData);
+        setPendingInfo(limitInfo);
+      }
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Error", description: "Failed to load dashboard data", variant: "destructive" });
+    }
     setLoading(false);
   }
 
-  const creditAvailable = stats.creditLimit - stats.creditUsed;
-  const creditUtilization = stats.creditLimit > 0 ? (stats.creditUsed / stats.creditLimit) * 100 : 0;
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "delivered": return "bg-[#2D5F3F] text-white";
-      case "shipped": return "bg-[#C77D2E] text-white";
-      case "processing": return "bg-[#D4AF37] text-white";
-      case "cancelled": return "bg-[#8B3A3A] text-white";
-      default: return "bg-[#6B6B6B] text-white";
+  const handleRecordPayment = (orderId: string) => {
+    const order = data?.recentOrders?.find((o: any) => o.id === orderId);
+    if (order) {
+      setSelectedOrderForPayment(order);
+      setShowPaymentModal(true);
     }
+  };
+
+  const handlePaymentRecorded = () => {
+    loadData(); // Reload dashboard data
+    toast({
+      title: "Payment Recorded",
+      description: "Payment has been successfully recorded",
+    });
   };
 
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <p className="text-center text-[#6B6B6B]">Loading...</p>
+        <div className="space-y-4 animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4" />
+          <div className="h-32 bg-gray-200 rounded" />
+          <div className="grid grid-cols-3 gap-4">
+            <div className="h-24 bg-gray-200 rounded" />
+            <div className="h-24 bg-gray-200 rounded" />
+            <div className="h-24 bg-gray-200 rounded" />
+          </div>
+        </div>
       </div>
     );
   }
+
+  if (!data) return null;
+
+  const { stats, brandSummary, recentOrders, payments } = data;
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       <div>
         <div className="flex items-center gap-3 mb-2">
           <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A]">Beauty Parlor Dashboard</h1>
-          <Badge className="bg-[#D4AF37] text-white">Premium Pricing</Badge>
+          <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white gap-1">
+            <Sparkles className="h-3 w-3" />
+            Beauty Professional Pricing
+          </Badge>
         </div>
-        <p className="text-[#6B6B6B]">Manage your orders and credit</p>
+        <p className="text-[#6B6B6B]">Manage your beauty supplies and track payments</p>
       </div>
 
-      {/* Credit Summary */}
-      <Card className="border-[#D4AF37]/30 bg-gradient-to-br from-[#D4AF37]/5 to-transparent">
-        <CardHeader>
-          <CardTitle className="font-serif text-2xl flex items-center gap-2">
-            <CreditCard className="h-6 w-6 text-[#D4AF37]" />
-            Credit Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="orders">Orders & Payments</TabsTrigger>
+          <TabsTrigger value="profile">Profile & Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          {/* Pending Limit Warning */}
+          {pendingInfo && (
+            <PendingLimitWarning
+              currentPending={pendingInfo.currentPending || 0}
+              pendingLimit={pendingInfo.pendingAmountLimit || 0}
+              onPayNow={() => {
+                toast({
+                  title: "Make a Payment",
+                  description: "Go to Orders & Payments tab to record a payment",
+                });
+              }}
+            />
+          )}
+
+          {/* Financial Summary */}
+          {pendingInfo && (
+            <FinancialSummaryCard
+              totalPending={pendingInfo.currentPending || 0}
+              pendingLimit={pendingInfo.pendingAmountLimit || 0}
+              totalPaid={stats?.totalPaid || 0}
+              totalLifetimeValue={stats?.totalSpent || 0}
+            />
+          )}
+
+          {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <p className="text-sm text-[#6B6B6B] mb-1">Credit Limit</p>
-              <p className="text-3xl font-bold text-[#1A1A1A]">₹{stats.creditLimit.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-sm text-[#6B6B6B] mb-1">Used</p>
-              <p className="text-3xl font-bold text-[#C77D2E]">₹{stats.creditUsed.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-sm text-[#6B6B6B] mb-1">Available</p>
-              <p className="text-3xl font-bold text-[#2D5F3F]">₹{creditAvailable.toLocaleString()}</p>
-            </div>
-          </div>
+            <Card className="hover:shadow-lg transition-shadow border-t-4 border-t-purple-500">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Orders</CardTitle>
+                <Package className="h-4 w-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#1A1A1A]">{stats?.totalOrders || 0}</div>
+                <p className="text-xs text-[#6B6B6B] mt-1">All time orders</p>
+              </CardContent>
+            </Card>
 
-          <div>
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-[#6B6B6B]">Credit Utilization</span>
-              <span className="font-semibold text-[#1A1A1A]">{creditUtilization.toFixed(1)}%</span>
-            </div>
-            <Progress value={creditUtilization} className="h-3" />
-          </div>
-
-          {creditUtilization > 80 && (
-            <div className="flex items-start gap-2 p-4 bg-[#C77D2E]/10 border border-[#C77D2E]/30 rounded-lg">
-              <AlertCircle className="h-5 w-5 text-[#C77D2E] flex-shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-semibold text-[#1A1A1A] mb-1">High Credit Utilization</p>
-                <p className="text-[#6B6B6B]">
-                  You're using {creditUtilization.toFixed(0)}% of your credit limit. Consider making a payment soon.
-                </p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Orders</CardTitle>
-            <Package className="h-4 w-4 text-[#D4AF37]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#1A1A1A]">{stats.totalOrders}</div>
-            <p className="text-xs text-[#6B6B6B] mt-1">All time orders</p>
-            <Link href="/orders">
-              <Button variant="link" className="px-0 text-[#D4AF37] mt-2">View orders</Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#6B6B6B]">Pending Payments</CardTitle>
-            <AlertCircle className="h-4 w-4 text-[#C77D2E]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#C77D2E]">₹{stats.pendingPayments.toFixed(2)}</div>
-            <p className="text-xs text-[#6B6B6B] mt-1">Outstanding balance</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Spent</CardTitle>
-            <TrendingUp className="h-4 w-4 text-[#D4AF37]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#1A1A1A]">₹{stats.totalSpent.toFixed(2)}</div>
-            <p className="text-xs text-[#6B6B6B] mt-1">Lifetime value</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#6B6B6B]">Credit Available</CardTitle>
-            <CreditCard className="h-4 w-4 text-[#2D5F3F]" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#2D5F3F]">₹{creditAvailable.toFixed(2)}</div>
-            <p className="text-xs text-[#6B6B6B] mt-1">Available credit</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-serif text-2xl">Recent Orders</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {recentOrders.length === 0 ? (
-            <div className="text-center py-12 text-[#6B6B6B]">
-              <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="mb-4">No orders yet</p>
-              <Link href="/store">
-                <Button className="bg-[#D4AF37] hover:bg-[#C19B2E] text-white">
-                  Browse Products
-                </Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {recentOrders.map((order) => (
-                <div key={order.id} className="flex justify-between items-center border-b border-[#F7F5F2] pb-4">
-                  <div>
-                    <p className="font-mono text-sm text-[#6B6B6B]">#{order.order_number}</p>
-                    <p className="text-sm text-[#6B6B6B]">{new Date(order.created_at).toLocaleDateString()}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-[#1A1A1A]">₹{order.total_amount.toFixed(2)}</p>
-                    <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                  </div>
+            <Card className="hover:shadow-lg transition-shadow border-t-4 border-t-green-500">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Paid</CardTitle>
+                <DollarSign className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  ₹{Number(stats?.totalPaid || 0).toLocaleString()}
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <p className="text-xs text-[#6B6B6B] mt-1">Total payments made</p>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-lg transition-shadow border-t-4 border-t-pink-500">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Spent</CardTitle>
+                <TrendingUp className="h-4 w-4 text-pink-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#1A1A1A]">
+                  ₹{Number(stats?.totalSpent || 0).toLocaleString()}
+                </div>
+                <p className="text-xs text-[#6B6B6B] mt-1">Lifetime value</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Brand Summary & Recent Orders */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-serif text-2xl flex items-center gap-2">
+                  <Tag className="h-6 w-6 text-purple-600" /> Brand Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!brandSummary || brandSummary.length === 0 ? (
+                  <p className="text-center text-[#6B6B6B] py-8">No brand data available yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {brandSummary.map((b: any) => (
+                      <div
+                        key={b.name}
+                        className="flex justify-between items-center border-b border-[#F7F5F2] pb-2 last:border-0 last:pb-0"
+                      >
+                        <div>
+                          <p className="font-semibold text-[#1A1A1A]">{b.name}</p>
+                          <p className="text-xs text-[#6B6B6B]">{b.count} items purchased</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-[#1A1A1A]">₹{b.total.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-serif text-2xl flex items-center gap-2">
+                  <Clock className="h-6 w-6 text-[#2D5F3F]" />
+                  Recent Orders
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!recentOrders || recentOrders.length === 0 ? (
+                  <div className="text-center py-12 text-[#6B6B6B]">
+                    <ShoppingBag className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="mb-4">No orders yet</p>
+                    <Link href="/store">
+                      <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white">
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Browse Products
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {recentOrders.slice(0, 5).map((order: any) => (
+                      <div
+                        key={order.id}
+                        className="flex justify-between items-center p-3 border rounded-lg hover:shadow-md transition-shadow"
+                      >
+                        <div>
+                          <p className="font-mono text-sm font-semibold">
+                            #{order.order_number || order.id.slice(0, 8)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(order.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">₹{Number(order.total_amount).toLocaleString()}</p>
+                          <Badge
+                            variant={order.payment_status === "paid" ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {order.payment_status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="orders" className="space-y-6">
+          <div className="grid gap-6">
+            {/* Orders List */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-serif text-2xl">All Orders</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!recentOrders || recentOrders.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Package className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                    <p>No orders found</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {recentOrders.map((order: any) => (
+                      <OrderCardEnhanced
+                        key={order.id}
+                        order={order}
+                        onRecordPayment={handleRecordPayment}
+                        showPaymentHistory={true}
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Payment History Timeline */}
+            {payments && payments.length > 0 && (
+              <PaymentTimeline payments={payments} />
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="profile">
+          <div className="max-w-2xl">
+            {user && <ProfileForm user={user} initialData={data.userProfile} />}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Payment Record Modal */}
+      {selectedOrderForPayment && (
+        <PaymentRecordModal
+          open={showPaymentModal}
+          onOpenChange={setShowPaymentModal}
+          orderId={selectedOrderForPayment.id}
+          orderNumber={selectedOrderForPayment.order_number}
+          pendingAmount={selectedOrderForPayment.pending_amount}
+          onPaymentRecorded={handlePaymentRecorded}
+          recordPaymentAction={recordPartialPayment}
+        />
+      )}
     </div>
   );
-}
-
 }

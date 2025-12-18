@@ -3,7 +3,7 @@ import { MainFooter } from "@/components/main-footer";
 import CustomerDashboard from "@/components/dashboards/customer-dashboard";
 import RetailerDashboard from "@/components/dashboards/retailer-dashboard";
 import ParlorDashboard from "@/components/dashboards/parlor-dashboard";
-import AdminDashboard from "@/components/dashboards/admin-dashboard";
+import SalesmanDashboard from "@/components/dashboards/salesman-dashboard";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../supabase/server";
 
@@ -26,15 +26,23 @@ export default async function Dashboard() {
 
   const role = userData?.role || "customer";
 
+  // Redirect admins and sub-admins to their respective dashboards
+  if (role === "admin") {
+    return redirect("/admin");
+  }
+  if (role === "sub_admin") {
+    return redirect("/sub-admin");
+  }
+
   return (
     <div className="min-h-screen bg-[#FDFCF9]">
       <MainNav />
-      
+
       <main>
-        {(role === "admin" || role === "sub_admin") && <AdminDashboard />}
         {role === "beauty_parlor" && <ParlorDashboard />}
         {role === "retailer" && <RetailerDashboard />}
-        {role === "customer" && <CustomerDashboard />}
+        {role === "salesman" && <SalesmanDashboard />}
+        {(role === "customer" || role === "local_customer") && <CustomerDashboard />}
       </main>
 
       <MainFooter />

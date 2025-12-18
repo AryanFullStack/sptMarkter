@@ -1,51 +1,70 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import MainNav from "@/components/main-nav";
-import MainFooter from "@/components/main-footer";
+import { useEffect, useState } from "react";
 import { createClient } from "@/supabase/client";
-import Link from "next/link";
+import { MainNav } from "@/components/main-nav";
+import { MainFooter } from "@/components/main-footer";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Package, Clock, CheckCircle, Truck, XCircle, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
 
-export default function OrdersPage() {
+export default function MyOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
   useEffect(() => {
-    loadOrders();
+    async function fetchOrders() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          items:order_items(*, product:products(name, images))
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (data) {
+        setOrders(data);
+      }
+      setLoading(false);
+    }
+
+    fetchOrders();
   }, []);
-
-  async function loadOrders() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (data) setOrders(data);
-    setLoading(false);
-  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "delivered": return "bg-[#2D5F3F] text-white";
-      case "shipped": return "bg-[#C77D2E] text-white";
-      case "processing": return "bg-[#D4AF37] text-white";
-      case "cancelled": return "bg-[#8B3A3A] text-white";
-      default: return "bg-[#6B6B6B] text-white";
+      case "confirmed":
+        return "bg-green-500";
+      case "pending":
+        return "bg-yellow-500";
+      case "pending_payment":
+        return "bg-orange-500";
+      case "cancelled":
+        return "bg-red-500";
+      case "delivered":
+        return "bg-blue-500";
+      default:
+        return "bg-gray-500";
     }
+  };
+
+  const getStatusLabel = (status: string) => {
+    return status.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FDFCF9]">
         <MainNav />
-        <div className="container mx-auto px-4 py-16">
-          <p className="text-center text-[#6B6B6B]">Loading orders...</p>
+        <div className="container mx-auto px-4 py-16 text-center">
+          <p>Loading your orders...</p>
         </div>
         <MainFooter />
       </div>
@@ -55,42 +74,83 @@ export default function OrdersPage() {
   return (
     <div className="min-h-screen bg-[#FDFCF9]">
       <MainNav />
-      <main className="container mx-auto px-4 py-16">
-        <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A] mb-8">My Orders</h1>
-        
+
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="font-display text-4xl font-bold text-[#1A1A1A] mb-8">
+          My Orders
+        </h1>
+
         {orders.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-[#6B6B6B] text-lg mb-6">No orders yet</p>
-            <Link href="/store" className="text-[#D4AF37] hover:underline">
-              Start Shopping
-            </Link>
+          <div className="text-center py-16 bg-white rounded-lg shadow-sm">
+            <Package className="h-24 w-24 text-gray-300 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">No Orders Yet</h2>
+            <p className="text-gray-600 mb-6">Looks like you haven't placed any orders yet.</p>
+            <Button asChild className="bg-[#D4AF37] hover:bg-[#B8941F]">
+              <Link href="/store">Start Shopping</Link>
+            </Button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {orders.map((order) => (
-              <Link key={order.id} href={`/orders/${order.id}`}>
-                <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className="font-mono text-sm text-[#6B6B6B]">Order #{order.order_number}</p>
-                      <p className="text-sm text-[#6B6B6B]">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <Badge className={getStatusColor(order.status)}>
-                      {order.status}
+              <div key={order.id} className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100">
+                {/* Order Header */}
+                <div className="bg-gray-50 p-6 border-b border-gray-100 flex flex-wrap gap-4 justify-between items-center">
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">Order Placed</p>
+                    <p className="font-medium">{new Date(order.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">Total Amount</p>
+                    <p className="font-medium">Rs. {order.total_amount.toLocaleString()}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">Status</p>
+                    <Badge className={`${getStatusColor(order.status)} text-white hover:${getStatusColor(order.status)}`}>
+                      {getStatusLabel(order.status)}
                     </Badge>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <p className="text-[#1A1A1A] font-semibold">₹{order.total_amount.toFixed(2)}</p>
-                    <span className="text-[#D4AF37] text-sm hover:underline">View Details →</span>
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500">Order #</p>
+                    <p className="font-medium font-mono text-sm">{order.id.slice(0, 8)}</p>
+                  </div>
+                  <div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/orders/${order.id}`}>View Details</Link>
+                    </Button>
                   </div>
                 </div>
-              </Link>
+
+                {/* Order Items Preview */}
+                <div className="p-6">
+                  {order.pending_amount > 0 && (
+                    <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-3 text-orange-800">
+                      <Clock className="h-5 w-5" />
+                      <div>
+                        <p className="font-semibold">Pending Balance: Rs. {order.pending_amount.toLocaleString()}</p>
+                        <p className="text-sm">Please clear the remaining amount to complete this order.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-4 overflow-x-auto pb-2">
+                    {order.items?.map((item: any) => (
+                      <div key={item.id} className="flex-shrink-0 w-20 h-20 relative rounded-md overflow-hidden border">
+                        <Image
+                          src={item.product?.images?.[0] || "/placeholder.jpg"}
+                          alt={item.product?.name || "Product"}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         )}
-      </main>
+      </div>
+
       <MainFooter />
     </div>
   );

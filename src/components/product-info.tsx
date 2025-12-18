@@ -28,8 +28,8 @@ export function ProductInfo({
     product.stock_quantity === 0
       ? "out_of_stock"
       : product.stock_quantity <= product.low_stock_threshold
-      ? "low_stock"
-      : "in_stock";
+        ? "low_stock"
+        : "in_stock";
 
   return (
     <div className="space-y-6">

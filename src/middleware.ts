@@ -27,10 +27,46 @@ export async function middleware(req: NextRequest) {
   )
 
   // Refresh session if expired - required for Server Components
-  const { data: { session }, error } = await supabase.auth.getSession()
+  // Use getUser() instead of getSession() for security
+  let user = null;
+  
+  try {
+    const { data: { user: authUser }, error } = await supabase.auth.getUser()
+    
+    // Only log non-session-missing errors
+    if (error && error.name !== 'AuthSessionMissingError') {
+      console.error('Auth error:', error)
+    }
+    
+    user = authUser;
+  } catch (err: any) {
+    // Silently handle auth errors during logout/session transitions
+    if (err?.name !== 'AuthSessionMissingError') {
+      console.error('Auth check error:', err)
+    }
+  }
 
-  if (error) {
-    console.error('Auth session error:', error)
+  // Role-based redirects after successful authentication
+  if (user && (req.nextUrl.pathname === '/sign-in' || req.nextUrl.pathname === '/sign-up')) {
+    // Fetch user role from database
+    const { data: userData } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (userData?.role) {
+      const role = userData.role
+      
+      // Redirect to appropriate dashboard based on role - separate for admin and sub-admin
+      if (role === 'admin') {
+        return NextResponse.redirect(new URL('/admin', req.url))
+      } else if (role === 'sub_admin') {
+        return NextResponse.redirect(new URL('/sub-admin', req.url))
+      } else {
+        return NextResponse.redirect(new URL('/dashboard', req.url))
+      }
+    }
   }
 
   return res
