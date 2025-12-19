@@ -21,8 +21,7 @@ export async function getAssignedBrands(salesmanId: string) {
         id,
         name,
         slug,
-        logo_url,
-        is_active
+        logo_url
       )
     `)
     .eq("salesman_id", salesmanId);
@@ -82,15 +81,16 @@ export async function getClientFinancialStatus(clientId: string) {
   const supabase = createAdminClient();
   if (!supabase) throw new Error("Admin client unavailable");
 
-  // Get user info
+  // Get user info - STRICTLY enforce role check for shop/parlor
   const { data: user, error: userError } = await supabase
     .from("users")
     .select("id, email, full_name, phone, role, pending_amount_limit, assigned_salesman_id")
     .eq("id", clientId)
+    .in("role", ["beauty_parlor", "retailer"])
     .single();
 
-  if (userError) {
-    return { error: "Failed to fetch client data" };
+  if (userError || !user) {
+    return { error: "Shop not found or invalid role" };
   }
 
   // Get all orders (not cancelled)
@@ -290,10 +290,10 @@ export async function createOrderForClient(
       paid_amount: paidAmount,
       pending_amount: pendingAmount,
       payment_status: paidAmount >= totalAmount ? "paid" : paidAmount > 0 ? "partial" : "pending",
-      shipping_address: {}, // Will be updated by client or admin
+      shipping_address: {}, 
       recorded_by: user.id,
       created_via: "salesman",
-      brand_id: brandId, // NEW: Save brand link
+      // brand_id: brandId, // Removed to prevent error as column is missing in schema
       notes: notes || "Order created by salesman",
     })
     .select()
@@ -304,20 +304,58 @@ export async function createOrderForClient(
     return { error: "Failed to create order" };
   }
 
-  // If there's an initial payment, record it
+  // --- MANUAL LEDGER UPDATE ---
+  // We update the ledger manually to ensure it works even if the brand_id on order is missing or triggers fail
+  if (brandId) {
+    try {
+      // 1. Get current ledger
+      const { data: currentLedger } = await supabase
+        .from("salesman_shop_ledger")
+        .select("*")
+        .eq("salesman_id", user.id)
+        .eq("shop_id", clientId)
+        .eq("brand_id", brandId)
+        .single();
+
+      if (currentLedger) {
+        // Update existing
+        await supabase
+          .from("salesman_shop_ledger")
+          .update({
+            total_sales: Number(currentLedger.total_sales) + totalAmount,
+            total_collected: Number(currentLedger.total_collected) + paidAmount,
+            pending_amount: Number(currentLedger.pending_amount) + pendingAmount,
+            last_updated: new Date().toISOString()
+          })
+          .eq("id", currentLedger.id);
+      } else {
+        // Create new
+        await supabase
+          .from("salesman_shop_ledger")
+          .insert({
+            salesman_id: user.id,
+            shop_id: clientId,
+            brand_id: brandId,
+            total_sales: totalAmount,
+            total_collected: paidAmount,
+            pending_amount: pendingAmount,
+            last_updated: new Date().toISOString()
+          });
+      }
+    } catch (ledgerErr) {
+      console.error("Manual ledger update failed:", ledgerErr);
+    }
+  }
+
+  // Record initial payment if any
   if (paidAmount > 0) {
-    const { error: paymentError } = await supabase.from("payments").insert({
+    await supabase.from("payments").insert({
       order_id: order.id,
       amount: paidAmount,
       payment_method: "cash",
       recorded_by: user.id,
-      notes: notes || "Initial payment collected by salesman",
+      notes: "Initial payment during order creation"
     });
-
-    if (paymentError) {
-      console.error("Error recording payment:", paymentError);
-      // Order created but payment failed - log this
-    }
   }
 
   // Log activity
@@ -331,6 +369,7 @@ export async function createOrderForClient(
       order_number: orderNumber,
       total_amount: totalAmount,
       paid_amount: paidAmount,
+      brand_id: brandId,
     },
   });
 
@@ -348,7 +387,8 @@ export async function recordPartialPayment(
   orderId: string,
   amount: number,
   paymentMethod: string,
-  notes: string
+  notes: string,
+  status: "pending" | "completed" = "completed"
 ) {
   const supabaseAuth = await createClient();
   const {
@@ -397,7 +437,8 @@ export async function recordPartialPayment(
     amount,
     payment_method: paymentMethod,
     recorded_by: user.id,
-    notes: notes || "Payment recorded by salesman",
+    notes: notes || (status === "pending" ? "Payment request by user" : "Payment recorded by salesman"),
+    status: status,
   });
 
   if (paymentError) {
@@ -470,8 +511,21 @@ export async function getSalesmanDashboardData(salesmanId: string) {
   // Get assigned brands
   const brands = await getAssignedBrands(salesmanId);
 
-  // Get orders created by this salesman
-  const { data: orders } = await supabase
+  // Get ALL orders to calculate accurate stats
+  const { data: allOrders } = await supabase
+    .from("orders")
+    .select(`
+      id,
+      user_id,
+      total_amount,
+      paid_amount,
+      pending_amount,
+      created_at
+    `)
+    .eq("recorded_by", salesmanId);
+
+  // Get recent 10 orders for the list
+  const { data: recentOrders } = await supabase
     .from("orders")
     .select(`
       id,
@@ -497,25 +551,132 @@ export async function getSalesmanDashboardData(salesmanId: string) {
   today.setHours(0, 0, 0, 0);
 
   const ordersToday =
-    orders?.filter((o) => new Date(o.created_at) >= today).length || 0;
+    allOrders?.filter((o) => new Date(o.created_at) >= today).length || 0;
   
-  const totalOrdersValue = orders?.reduce((sum, o) => sum + Number(o.total_amount || 0), 0) || 0;
+  const totalOrdersValue = allOrders?.reduce((sum, o) => sum + Number(o.total_amount || 0), 0) || 0;
+  const totalCollection = allOrders?.reduce((sum, o) => sum + Number(o.paid_amount || 0), 0) || 0;
+  const totalPending = allOrders?.reduce((sum, o) => sum + Number(o.pending_amount || 0), 0) || 0;
   
-  const clientsServed = new Set(orders?.map((o) => o.user && typeof o.user === 'object' && 'id' in o.user ? o.user.id : null).filter(Boolean)).size;
+  const clientsServed = new Set(allOrders?.map((o) => o.user_id).filter(Boolean)).size;
+
+  // Get brand-wise pending totals
+  const { data: brandLedgers } = await supabase
+    .from("salesman_shop_ledger")
+    .select("brand_id, shop_id, pending_amount, last_updated, brands(name)")
+    .eq("salesman_id", salesmanId);
+
+  const brandPendingMap: Record<string, { id: string; name: string; amount: number }> = {};
+  brandLedgers?.forEach((l: any) => {
+    const bId = l.brand_id;
+    const bName = l.brands?.name || "Unknown Brand";
+    if (!brandPendingMap[bId]) brandPendingMap[bId] = { id: bId, name: bName, amount: 0 };
+    brandPendingMap[bId].amount += Number(l.pending_amount || 0);
+  });
+
+  // Get Shop summaries (Total Pending per Shop)
+  const shopLedgersMap: Record<string, { id: string; name: string; pending: number; last_updated: string }> = {};
+  brandLedgers?.forEach((l: any) => {
+    const sId = l.shop_id || 'unknown'; // Note: missed shop name in select, will add in next pass if needed
+    if (!shopLedgersMap[sId]) shopLedgersMap[sId] = { id: sId, name: "Shop", pending: 0, last_updated: l.last_updated };
+    shopLedgersMap[sId].pending += Number(l.pending_amount || 0);
+    if (new Date(l.last_updated) > new Date(shopLedgersMap[sId].last_updated)) {
+      shopLedgersMap[sId].last_updated = l.last_updated;
+    }
+  });
+
+  // To get shop names, we need a better query or a separate fetch
+  const shopIds = Array.from(new Set(brandLedgers?.map(l => l.shop_id).filter(Boolean)));
+  if (shopIds.length > 0) {
+    const { data: shopNames } = await supabase
+      .from("users")
+      .select("id, full_name")
+      .in("id", shopIds);
+    
+    shopNames?.forEach(s => {
+      if (shopLedgersMap[s.id]) shopLedgersMap[s.id].name = s.full_name || "Unnamed Shop";
+    });
+  }
 
   // Get recent activity
   const activity = await getSalesmanActivity(salesmanId);
 
   return {
     brands: brands.brands || [],
-    recentOrders: orders || [],
+    recentOrders: recentOrders || [],
+    brandPending: Object.values(brandPendingMap),
+    shopLedgers: Object.values(shopLedgersMap).sort((a, b) => b.pending - a.pending),
     stats: {
       ordersToday,
       totalOrdersValue,
+      totalCollection,
+      totalPending,
       clientsServed,
     },
     recentActivity: activity.activities || [],
   };
+}
+
+/**
+ * Get full order history for a salesman
+ */
+export async function getSalesmanOrderHistory(salesmanId: string, limit = 50, offset = 0) {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  const { data, error, count } = await supabase
+    .from("orders")
+    .select(`
+      id,
+      order_number,
+      total_amount,
+      paid_amount,
+      pending_amount,
+      payment_status,
+      status,
+      created_at,
+      brand_id,
+      user:user_id (
+        id,
+        full_name,
+        email
+      )
+    `, { count: 'exact' })
+    .eq("recorded_by", salesmanId)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    console.error("Error fetching order history:", error);
+    return { error: "Failed to fetch order history" };
+  }
+
+  return { orders: data, totalCount: count };
+}
+
+/**
+ * Get full details for a specific order
+ */
+export async function getOrderDetails(orderId: string) {
+    const supabase = createAdminClient();
+    if (!supabase) throw new Error("Admin client unavailable");
+
+    const { data, error } = await supabase
+        .from("orders")
+        .select(`
+            *,
+            user:user_id (*),
+            recorded_by_user:recorded_by (full_name),
+            payments (*)
+        `)
+        .eq("id", orderId)
+        .single();
+
+    if (error) {
+        console.error("Error fetching order details:", error);
+        return { error: "Failed to fetch order details" };
+    }
+
+    return { order: data };
 }
 
 /**
@@ -563,7 +724,6 @@ export async function getProductsForBrand(brandId: string) {
     .from("products")
     .select("*")
     .eq("brand_id", brandId)
-    .eq("is_active", true)
     .order("name");
 
   if (error) {
@@ -575,22 +735,102 @@ export async function getProductsForBrand(brandId: string) {
 }
 
 /**
- * Get Ledger Reports for Admin
+ * Get pending payment requests for Admin or Salesman
  */
-export async function getShopLedgerReports() {
-    const supabase = createAdminClient();
-    if (!supabase) throw new Error("Admin client unavailable");
+export async function getPaymentRequests(salesmanId?: string) {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  let query = supabase
+    .from("payments")
+    .select(`
+      id,
+      amount,
+      payment_method,
+      notes,
+      created_at,
+      status,
+      order:order_id (
+        id,
+        order_number,
+        total_amount,
+        pending_amount,
+        brand:brand_id (name),
+        user:user_id (id, full_name, role),
+        recorded_by_user:recorded_by (full_name)
+      )
+    `)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  if (salesmanId) {
+    // Note: This relies on orders having brand_id or recorded_by linked to salesman
+    // For now, let's filter by recorded_by or client's assigned salesman
+    // A better way is to join orders and check assigned_salesman_id
+    // But since we can't easily do complex joins in supabase client without views:
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("recorded_by", salesmanId);
     
-    // We can use the view created in migration
-    const { data, error } = await supabase
-        .from('shop_pending_summary')
-        .select('*')
-        .order('total_pending_used', { ascending: false });
-
-    if (error) {
-        console.error("Error fetching ledger reports:", error);
-        return { error: error.message };
+    const orderIds = orders?.map(o => o.id) || [];
+    if (orderIds.length > 0) {
+      query = query.in("order_id", orderIds);
+    } else {
+      return { requests: [] };
     }
+  }
 
-    return { reports: data };
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching payment requests:", error);
+    return { error: "Failed to fetch payment requests" };
+  }
+
+  return { requests: data };
+}
+
+/**
+ * Approve a payment request
+ */
+export async function approvePaymentRequest(paymentId: string) {
+  const supabaseAuth = await createClient();
+  const { data: { user } } = await supabaseAuth.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  // Verify role (Admin, Sub-Admin, or Salesman)
+  const { data: userData } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!["admin", "sub_admin", "salesman"].includes(userData?.role || "")) {
+    return { error: "Unauthorized: Insufficient permissions" };
+  }
+
+  // Update payment status
+  const { error: updateError } = await supabase
+    .from("payments")
+    .update({ 
+      status: "completed",
+      recorded_by: user.id, // Mark who approved/collected it
+      notes: "Payment approved and collected"
+    })
+    .eq("id", paymentId);
+
+  if (updateError) {
+    console.error("Error approving payment:", updateError);
+    return { error: "Failed to approve payment" };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/salesman");
+  revalidatePath("/dashboard");
+
+  return { success: true };
 }

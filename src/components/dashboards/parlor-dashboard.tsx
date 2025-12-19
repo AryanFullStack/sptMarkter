@@ -9,8 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { ProfileForm } from "@/components/dashboards/profile-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getRetailerDashboardData } from "@/app/actions/retailer-actions";
-import { recordPartialPayment } from "@/app/actions/salesman-actions";
+import { getRetailerDashboardData, requestPayment } from "@/app/actions/retailer-actions";
 import { getPendingLimitInfo } from "@/app/actions/pending-limit-actions";
 import { useToast } from "@/hooks/use-toast";
 import { FinancialSummaryCard } from "@/components/shared/financial-summary-card";
@@ -66,8 +65,8 @@ export default function ParlorDashboard() {
   const handlePaymentRecorded = () => {
     loadData(); // Reload dashboard data
     toast({
-      title: "Payment Recorded",
-      description: "Payment has been successfully recorded",
+      title: "Payment Requested",
+      description: "Your payment request has been sent for approval.",
     });
   };
 
@@ -311,7 +310,10 @@ export default function ParlorDashboard() {
           orderNumber={selectedOrderForPayment.order_number}
           pendingAmount={selectedOrderForPayment.pending_amount}
           onPaymentRecorded={handlePaymentRecorded}
-          recordPaymentAction={recordPartialPayment}
+          recordPaymentAction={requestPayment}
+          title="Request Payment"
+          description="Submit a payment request for approval by Admin or Salesman"
+          buttonText="Submit Request"
         />
       )}
     </div>

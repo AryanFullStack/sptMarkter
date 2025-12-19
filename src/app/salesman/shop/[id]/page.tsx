@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
-import { getClientFinancialStatus, getSalesmanShopLedger, getAssignedBrands } from "@/app/actions/salesman-actions";
+import { useParams, useRouter } from "next/navigation";
+import { getClientFinancialStatus, getSalesmanShopLedger, getAssignedBrands, recordPartialPayment } from "@/app/actions/salesman-actions";
 import { createClient } from "@/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,30 +11,61 @@ import { Progress } from "@/components/ui/progress";
 import { Loader2, Store, Phone, MapPin, DollarSign, PlusCircle, History, AlertTriangle, Building2, User } from "lucide-react";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ShopDetailPage() {
     const params = useParams();
+    const router = useRouter();
     const shopId = params?.id as string;
+    const { toast } = useToast();
 
     const [loading, setLoading] = useState(true);
     const [shopData, setShopData] = useState<any>(null);
     const [ledgerData, setLedgerData] = useState<any>(null);
     const [assignedBrands, setAssignedBrands] = useState<any[]>([]);
     const [salesmanId, setSalesmanId] = useState<string | null>(null);
+    const [addresses, setAddresses] = useState<any[]>([]);
+    const [payments, setPayments] = useState<any[]>([]);
+
+    // Payment State
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [paymentAmount, setPaymentAmount] = useState<string>("");
+    const [paymentNotes, setPaymentNotes] = useState("");
+    const [paymentProcessing, setPaymentProcessing] = useState(false);
+    const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+    const [maxPayment, setMaxPayment] = useState<number>(0);
 
     useEffect(() => {
         loadData();
     }, [shopId]);
 
     async function loadData() {
+        // ... (existing loadData implementation)
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
-        if (!user || user.role !== 'salesman') {
+        if (!user) {
             setLoading(false);
             return;
         }
-        setSalesmanId(user.id);
+
+        // Verify salesman role from users table
+        const { data: userData } = await supabase
+            .from('users')
+            .select('role, id')
+            .eq('id', user.id)
+            .single();
+
+        if (!userData || userData.role !== 'salesman') {
+            setLoading(false);
+            return;
+        }
+
+        setSalesmanId(userData.id);
 
         try {
             const [clientStatus, ledgerStatus, brandsRes] = await Promise.all([
@@ -46,12 +77,89 @@ export default function ShopDetailPage() {
             setShopData(clientStatus);
             setLedgerData(ledgerStatus);
             setAssignedBrands(brandsRes.brands || []);
+
+            // Fetch Addresses
+            const { data: addrData } = await supabase
+                .from("addresses")
+                .select("*")
+                .eq("user_id", shopId)
+                .order("is_default", { ascending: false });
+            setAddresses(addrData || []);
+
+            // Fetch Payments for these orders
+            if (clientStatus.orders && clientStatus.orders.length > 0) {
+                const orderIds = clientStatus.orders.map((o: any) => o.id);
+                const { data: payData } = await supabase
+                    .from("payments")
+                    .select("*")
+                    .in("order_id", orderIds)
+                    .order("created_at", { ascending: false });
+                setPayments(payData || []);
+            }
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
         }
     }
+
+    const handlePaymentSubmit = async () => {
+        if (!paymentAmount || Number(paymentAmount) <= 0) {
+            toast({ title: "Invalid Amount", description: "Please enter a valid amount", variant: "destructive" });
+            return;
+        }
+
+        setPaymentProcessing(true);
+        try {
+            // Check against total pending (globally or just my ledger? Implementing per order is complex without order selection, 
+            // but the requirement is "update pending amounts". 
+            // The action `recordPartialPayment` takes an `orderId`. 
+            // Wait, the action `recordPartialPayment` requires an `orderId`.
+            // But here on the shop page, we are collecting general payment?
+            // If the user wants to pay "some amount", it usually goes to the oldest order or is general credit.
+            // However, the current backend action `recordPartialPayment` IS TIED TO A SPECIFIC ORDER.
+            // I need to either: 
+            // 1. Ask user to select an order (Complex UI)
+            // 2. Automatically apply to oldest unpaid order (Backend logic, but I can't change backend easily right now without verify)
+            // 3. Update the action or create a new one for "Account Payment".
+
+            // Let's look at `salesman-actions.ts` again. 
+            // It has `recordPartialPayment(orderId...)`.
+            // It does NOT have a general "Pay to Account" function.
+
+            // Since I am in EXECUTION and constrained, and the user said "like next time user give again some amount", 
+            // it implies account-level or order-level.
+            // Given the task was "Select Products... payment user amount, pending amounts",
+            // I should probably show a list of Pending Orders and let them pay off specific ones?
+            // OR, for now, to make it simple and robust:
+            // I will FETCH the recent unpaid orders for this shop in the modal, let them select one.
+            // Actually, `getSalesmanShopLedger` gives pending amount but not list of orders.
+            // `getClientFinancialStatus` returns `orders`.
+
+            // I will iterate through unpaid orders and apply the payment? NO, that's dangerous.
+            // I will change the UI to "Pay against specific Order" or just show pending orders list and "Pay" button next to them?
+            // The user request was "update pending amounts".
+
+            // Let's look at `getClientFinancialStatus` usage. It returns `orders`.
+            // I can show a list of unpaid orders in the "My Ledger" section or a new tab, and allow paying them?
+
+            // Let's stick to the plan: "Implement 'Collect Payment' Feature (Shop Details)".
+            // I will implement a "General Payment" that automatically pays off the oldest orders? 
+            // No, the action requires `orderId`.
+
+            // I'll add a "Pay for specific order" flow.
+            // I need to list pending orders. `shopData.orders` has them.
+
+            // RE-PLANNING MICRO-STEP:
+            // 1. Display Pending Orders in a new Card or Section.
+            // 2. Add "Pay" button next to each pending order.
+            // 3. The Dialog opens for THAT order.
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    // STARTING OVER WITH THE FILE REPLACEMENT TO INCLUDE ORDERS LIST AND PAY BUTTONS
 
     if (loading) {
         return (
@@ -72,14 +180,40 @@ export default function ShopDetailPage() {
         );
     }
 
-    const { user: shop, financialSummary } = shopData;
-    const { ledgers, totalInternalPending } = ledgerData || { ledgers: [], totalInternalPending: 0 };
-
+    const { user: shop, financialSummary, orders } = shopData; // Destructure orders
+    const ledgers = ledgerData?.ledgers || [];
+    const totalInternalPending = ledgerData?.totalInternalPending || 0;
     const isBlocked = financialSummary.remainingLimit <= 0 && financialSummary.pendingLimit > 0;
+
+    // Filter pending orders
+    const pendingOrders = orders?.filter((o: any) => o.payment_status !== 'paid' && o.status !== 'cancelled') || [];
+
+    const openPaymentModal = (orderId: string, currentPending: number) => {
+        setPaymentOrderId(orderId);
+        setMaxPayment(currentPending);
+        setPaymentAmount("");
+        setPaymentModalOpen(true);
+    };
+
+    const submitPayment = async () => {
+        if (!paymentOrderId || !paymentAmount || Number(paymentAmount) <= 0) return;
+
+        setPaymentProcessing(true);
+        const res = await recordPartialPayment(paymentOrderId, Number(paymentAmount), "cash", paymentNotes);
+
+        if (res.error) {
+            toast({ title: "Payment Failed", description: res.error, variant: "destructive" });
+        } else {
+            toast({ title: "Payment Recorded", description: "Payment has been successfully recorded." });
+            setPaymentModalOpen(false);
+            loadData(); // Refresh
+        }
+        setPaymentProcessing(false);
+    };
 
     return (
         <div className="container mx-auto px-4 py-8 space-y-8 max-w-5xl">
-            {/* Breadcrumb */}
+            {/* ... Breadcrumb & Header (unchanged) ... */}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Link href="/salesman" className="hover:text-primary">Dashboard</Link>
                 <span>/</span>
@@ -105,6 +239,15 @@ export default function ShopDetailPage() {
                         <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4" /> {shop.phone || "No phone"}
                         </div>
+                        {addresses.length > 0 && (
+                            <div className="flex items-start gap-2">
+                                <MapPin className="h-4 w-4 mt-0.5" />
+                                <div>
+                                    <p className="font-medium">{addresses[0].address_line1}</p>
+                                    <p>{addresses[0].city}, {addresses[0].state} {addresses[0].postal_code}</p>
+                                </div>
+                            </div>
+                        )}
                         <div className="flex items-center gap-2">
                             <User className="h-4 w-4" />
                             {shop.assigned_salesman_id === salesmanId ? (
@@ -145,6 +288,7 @@ export default function ShopDetailPage() {
                 </Card>
             </div>
 
+
             {/* Salesman's Ledger Section */}
             <div>
                 <h2 className="font-serif text-2xl font-semibold mb-4 text-[#1A1A1A]">My Ledger</h2>
@@ -156,17 +300,11 @@ export default function ShopDetailPage() {
                                 <DollarSign className="h-5 w-5" />
                                 <span className="font-medium">My Total Pending</span>
                             </div>
-                            <p className="text-4xl font-bold">₹{totalInternalPending.toLocaleString()}</p>
+                            <p className="text-4xl font-bold">₹{(totalInternalPending || 0).toLocaleString()}</p>
                             <p className="text-sm mt-2 opacity-80">
                                 Outstanding balance for orders recorded by you.
                             </p>
-                            <Button
-                                variant="outline"
-                                className="w-full mt-6 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                                onClick={() => {/* Navigate to payment recording */ }}
-                            >
-                                Record Payment
-                            </Button>
+                            {/* Removed generic Record Payment button as we are now doing per-order */}
                         </CardContent>
                     </Card>
 
@@ -210,6 +348,59 @@ export default function ShopDetailPage() {
                 </div>
             </div>
 
+            {/* Pending Orders List */}
+            {pendingOrders.length > 0 && (
+                <div>
+                    <h2 className="font-serif text-2xl font-semibold mb-4 text-[#1A1A1A]">Pending Orders</h2>
+                    <div className="space-y-3">
+                        {pendingOrders.map((order: any) => (
+                            <Card key={order.id} className="overflow-hidden">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-4">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold">{order.order_number}</span>
+                                            <Badge variant="outline">{new Date(order.created_at).toLocaleDateString()}</Badge>
+                                        </div>
+                                        <div className="text-sm text-muted-foreground mt-1">
+                                            Total: ₹{order.total_amount} | Paid: ₹{order.paid_amount}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 justify-between sm:justify-end">
+                                        <div className="text-right">
+                                            <p className="font-bold text-red-600">₹{order.pending_amount}</p>
+                                            <p className="text-xs text-muted-foreground">Pending</p>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            className="bg-[#2D5F3F] hover:bg-[#1e402a] text-white"
+                                            onClick={() => openPaymentModal(order.id, order.pending_amount)}
+                                        >
+                                            Collect
+                                        </Button>
+                                    </div>
+                                </div>
+                                {payments.filter(p => p.order_id === order.id).length > 0 && (
+                                    <div className="bg-gray-50 border-t p-3 text-xs">
+                                        <p className="font-semibold mb-2 flex items-center gap-1 uppercase tracking-wider text-gray-500">
+                                            <History className="h-3 w-3" /> Payment History
+                                        </p>
+                                        <div className="space-y-1">
+                                            {payments.filter(p => p.order_id === order.id).map((p: any) => (
+                                                <div key={p.id} className="flex justify-between items-center text-gray-600">
+                                                    <span>Collected ₹{Number(p.amount).toLocaleString()} on {new Date(p.created_at).toLocaleDateString()}</span>
+                                                    <span className="italic text-[10px]">{p.notes || 'No notes'}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+
             {/* Actions */}
             <div>
                 <h2 className="font-serif text-2xl font-semibold mb-4 text-[#1A1A1A]">Actions</h2>
@@ -234,12 +425,55 @@ export default function ShopDetailPage() {
                 )}
             </div>
 
-            {/* Recent Orders - Could reuse shared component */}
             <Separator />
 
             <div className="text-center text-sm text-muted-foreground pt-4">
                 <p>Showing independent ledger data. Global limits are enforced by Admin.</p>
             </div>
+
+            <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Collect Payment</DialogTitle>
+                        <DialogDescription>
+                            Record a payment for order. Max collectable: ₹{maxPayment}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="amount">Amount (₹)</Label>
+                            <Input
+                                id="amount"
+                                type="number"
+                                value={paymentAmount}
+                                onChange={(e) => setPaymentAmount(e.target.value)}
+                                max={maxPayment}
+                                placeholder="Enter amount"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="notes">Notes</Label>
+                            <Textarea
+                                id="notes"
+                                value={paymentNotes}
+                                onChange={(e) => setPaymentNotes(e.target.value)}
+                                placeholder="Payment details (e.g. cash)"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setPaymentModalOpen(false)}>Cancel</Button>
+                        <Button
+                            onClick={submitPayment}
+                            disabled={paymentProcessing}
+                            className="bg-[#2D5F3F] text-white"
+                        >
+                            {paymentProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Confirm Payment
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

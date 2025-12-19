@@ -14,6 +14,7 @@ interface Payment {
     created_at: string;
     payment_sequence?: number;
     remaining_balance?: number;
+    status: "pending" | "completed" | "failed" | "refunded";
     order?: {
         order_number: string;
         total_amount: number;
@@ -140,6 +141,16 @@ export function PaymentTimeline({
                                                     {formatCurrency(payment.amount)}
                                                 </span>
                                                 {getPaymentMethodBadge(payment.payment_method)}
+                                                <Badge
+                                                    variant={payment.status === "completed" ? "default" : "secondary"}
+                                                    className={cn(
+                                                        "ml-2 capitalize",
+                                                        payment.status === "pending" && "bg-orange-500 hover:bg-orange-600 text-white",
+                                                        payment.status === "completed" && "bg-green-600 hover:bg-green-700 text-white"
+                                                    )}
+                                                >
+                                                    {payment.status}
+                                                </Badge>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                 <Clock className="h-3 w-3" />

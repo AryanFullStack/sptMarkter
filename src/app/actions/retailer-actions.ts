@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/supabase/server";
+import { recordPartialPayment } from "./salesman-actions";
+import { revalidatePath } from "next/cache";
 
 export async function getRetailerDashboardData() {
   const supabase = await createClient();
@@ -113,4 +115,22 @@ export async function getRetailerDashboardData() {
     },
     userProfile
   };
+}
+/**
+ * Request a payment (creates a pending payment record)
+ */
+export async function requestPayment(
+  orderId: string,
+  amount: number,
+  paymentMethod: string,
+  notes: string
+) {
+  const res = await recordPartialPayment(orderId, amount, paymentMethod, notes, "pending");
+  
+  if (res.success) {
+    revalidatePath("/dashboard");
+    revalidatePath("/orders");
+  }
+  
+  return res;
 }

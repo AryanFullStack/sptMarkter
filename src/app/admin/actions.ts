@@ -117,10 +117,11 @@ export async function suspendUser(userId: string, suspended: boolean) {
 
 // Product Management Actions
 export async function createProduct(productData: any) {
-  const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  // Verify permissions first
+  await checkPermissions(['admin']);
+
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
 
   // Fix UUID validation: convert empty strings to null
   const cleanedData = {
@@ -135,24 +136,33 @@ export async function createProduct(productData: any) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("Error creating product:", error);
+    throw new Error(error.message);
+  }
 
-  await logAudit({
-    action: "PRODUCT_CREATED",
-    entity_type: "product",
-    entity_id: data.id,
-    changes: cleanedData,
-  });
+  // Log audit - using auth user since we are in a server action with auth
+  const supabaseAuth = await createClient();
+  const { data: { user } } = await supabaseAuth.auth.getUser();
+
+  if (user) {
+    await logAudit({
+        action: "PRODUCT_CREATED",
+        entity_type: "product",
+        entity_id: data.id,
+        changes: cleanedData,
+    });
+  }
 
   revalidatePath("/admin/products");
   return { success: true, data };
 }
 
 export async function updateProduct(productId: string, productData: any) {
-  const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  await checkPermissions(['admin']);
+
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
 
   // Fix UUID validation: convert empty strings to null
   const cleanedData = {
@@ -168,8 +178,12 @@ export async function updateProduct(productId: string, productData: any) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+      console.error("Error updating product:", error);
+      throw new Error(error.message);
+  }
 
+  // Audit Log
   await logAudit({
     action: "PRODUCT_UPDATED",
     entity_type: "product",
@@ -182,17 +196,20 @@ export async function updateProduct(productId: string, productData: any) {
 }
 
 export async function deleteProduct(productId: string) {
-  const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  await checkPermissions(['admin']);
+
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
 
   const { error } = await supabase
     .from("products")
     .delete()
     .eq("id", productId);
 
-  if (error) throw error;
+  if (error) {
+      console.error("Error deleting product:", error);
+      throw new Error(error.message);
+  }
 
   await logAudit({
     action: "PRODUCT_DELETED",

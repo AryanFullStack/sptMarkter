@@ -11,11 +11,28 @@ import { ProfileForm } from "@/components/dashboards/profile-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getSalesmanDashboardData } from "@/app/actions/salesman-actions";
 import { useToast } from "@/hooks/use-toast";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getSalesmanOrderHistory, getOrderDetails } from "@/app/actions/salesman-actions";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Eye } from "lucide-react";
+import { PaymentRequestManagement } from "../shared/payment-request-management";
 
 export default function SalesmanDashboard() {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [user, setUser] = useState<any>(null);
+    const [selectedOrder, setSelectedOrder] = useState<any>(null);
+    const [orderModalOpen, setOrderModalOpen] = useState(false);
+    const [orderHistory, setOrderHistory] = useState<any[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     const supabase = createClient();
     const { toast } = useToast();
@@ -50,6 +67,30 @@ export default function SalesmanDashboard() {
         setLoading(false);
     }
 
+    async function loadHistory() {
+        if (!user) return;
+        setHistoryLoading(true);
+        try {
+            const res = await getSalesmanOrderHistory(user.id);
+            if (res.orders) setOrderHistory(res.orders);
+        } catch (e) {
+            console.error(e);
+        }
+        setHistoryLoading(false);
+    }
+
+    async function handleViewDetails(orderId: string) {
+        try {
+            const res = await getOrderDetails(orderId);
+            if (res.order) {
+                setSelectedOrder(res.order);
+                setOrderModalOpen(true);
+            }
+        } catch (e) {
+            toast({ title: "Error", description: "Failed to load order details" });
+        }
+    }
+
     if (loading) {
         return (
             <div className="container mx-auto px-4 py-8">
@@ -68,7 +109,7 @@ export default function SalesmanDashboard() {
 
     if (!data) return null;
 
-    const { stats, brands, recentOrders } = data;
+    const { stats, brands, recentOrders, brandPending, shopLedgers } = data;
 
     return (
         <div className="container mx-auto px-4 py-8 space-y-8">
@@ -84,11 +125,15 @@ export default function SalesmanDashboard() {
                 </Link>
             </div>
 
-            <Tabs defaultValue="overview" className="space-y-6">
+            <Tabs defaultValue="overview" className="space-y-6" onValueChange={(val) => {
+                if (val === 'history') loadHistory();
+            }}>
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="ledgers">My Ledgers</TabsTrigger>
                     <TabsTrigger value="brands">My Brands</TabsTrigger>
                     <TabsTrigger value="history">Order History</TabsTrigger>
+                    <TabsTrigger value="requests">Payment Requests</TabsTrigger>
                     <TabsTrigger value="profile">Profile</TabsTrigger>
                 </TabsList>
 
@@ -108,14 +153,27 @@ export default function SalesmanDashboard() {
 
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Sales Value</CardTitle>
+                                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Collection</CardTitle>
                                 <DollarSign className="h-4 w-4 text-green-600" />
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold text-green-600">
-                                    ₹{Number(stats?.totalOrdersValue || 0).toLocaleString()}
+                                    ₹{Number(stats?.totalCollection || 0).toLocaleString()}
                                 </div>
-                                <p className="text-xs text-[#6B6B6B] mt-1">Total value of recent orders</p>
+                                <p className="text-xs text-[#6B6B6B] mt-1">Cash collected from orders</p>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Pending</CardTitle>
+                                <Clock className="h-4 w-4 text-[#8B3A3A]" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-[#8B3A3A]">
+                                    ₹{Number(stats?.totalPending || 0).toLocaleString()}
+                                </div>
+                                <p className="text-xs text-[#6B6B6B] mt-1">Outstanding collections</p>
                             </CardContent>
                         </Card>
 
@@ -126,9 +184,27 @@ export default function SalesmanDashboard() {
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold text-[#1A1A1A]">{stats?.clientsServed || 0}</div>
-                                <p className="text-xs text-[#6B6B6B] mt-1">Unique clients in recent orders</p>
+                                <p className="text-xs text-[#6B6B6B] mt-1">Unique shops served</p>
                             </CardContent>
                         </Card>
+                    </div>
+
+                    {/* Pending by Brand Section */}
+                    <div>
+                        <h2 className="font-serif text-xl font-semibold mb-4 text-[#1A1A1A]">Pending by Brand</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {brandPending?.map((bp: any) => (
+                                <Card key={bp.id} className="bg-white border-l-4 border-l-[#D4AF37]">
+                                    <CardContent className="p-4">
+                                        <p className="text-xs font-medium text-[#6B6B6B] uppercase">{bp.name}</p>
+                                        <p className="text-xl font-bold text-[#1A1A1A] mt-1">₹{Number(bp.amount).toLocaleString()}</p>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                            {(!brandPending || brandPending.length === 0) && (
+                                <p className="text-sm text-[#6B6B6B]">No pending amounts recorded by brand.</p>
+                            )}
+                        </div>
                     </div>
 
                     {/* Recent Orders List */}
@@ -150,32 +226,83 @@ export default function SalesmanDashboard() {
                                     {recentOrders.map((order: any) => (
                                         <div
                                             key={order.id}
-                                            className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                                            onClick={() => handleViewDetails(order.id)}
+                                            className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
                                         >
                                             <div className="mb-2 sm:mb-0">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="font-mono font-semibold text-[#1A1A1A]">
+                                                    <span className="font-mono font-semibold text-[#1A1A1A] group-hover:text-[#D4AF37]">
                                                         #{order.order_number || order.id.slice(0, 8)}
                                                     </span>
-                                                    <Badge variant={order.payment_status === "paid" ? "default" : "outline"} className="text-xs">
-                                                        {order.payment_status}
+                                                    <Badge variant={order.status === "delivered" || order.status === "completed" ? "default" : "secondary"} className="text-[10px]">
+                                                        {order.status?.toUpperCase()}
+                                                    </Badge>
+                                                    <Badge variant={order.payment_status === "paid" ? "outline" : "destructive"} className="text-[10px]">
+                                                        {order.payment_status?.toUpperCase()}
                                                     </Badge>
                                                 </div>
-                                                <p className="text-sm text-[#6B6B6B]">
+                                                <p className="text-sm text-[#6B6B6B] mt-1">
                                                     For: <span className="font-medium text-[#1A1A1A]">{order.user?.full_name || "Unknown Client"}</span>
                                                 </p>
                                                 <p className="text-xs text-[#8C8C8C]">
-                                                    {new Date(order.created_at).toLocaleDateString()} at {new Date(order.created_at).toLocaleTimeString()}
+                                                    {new Date(order.created_at).toLocaleDateString()}
                                                 </p>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="font-bold text-lg">₹{Number(order.total_amount).toLocaleString()}</p>
-                                                <p className="text-xs text-[#6B6B6B]">Pending: ₹{Number(order.pending_amount).toLocaleString()}</p>
+                                            <div className="text-right flex items-center gap-4">
+                                                <div>
+                                                    <p className="font-bold text-lg">₹{Number(order.total_amount).toLocaleString()}</p>
+                                                    <p className="text-xs text-red-600 font-medium">Pending: ₹{Number(order.pending_amount).toLocaleString()}</p>
+                                                </div>
+                                                <Eye className="h-4 w-4 text-gray-300 group-hover:text-[#D4AF37]" />
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="ledgers" className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="font-serif text-xl flex items-center gap-2">
+                                <Users className="h-5 w-5 text-[#2D5F3F]" /> Shop Ledgers
+                            </CardTitle>
+                            <CardDescription>Overview of pending amounts for each shop under your brands</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Shop Name</TableHead>
+                                            <TableHead className="text-right">Total Pending</TableHead>
+                                            <TableHead className="text-right">Last Order</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {shopLedgers?.map((sl: any) => (
+                                            <TableRow key={sl.id}>
+                                                <TableCell className="font-medium">{sl.name}</TableCell>
+                                                <TableCell className="text-right text-red-600 font-bold">₹{Number(sl.pending).toLocaleString()}</TableCell>
+                                                <TableCell className="text-right text-xs text-[#6B6B6B]">{new Date(sl.last_updated).toLocaleDateString()}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Link href={`/salesman/shop/${sl.id}`}>
+                                                        <Button variant="ghost" size="sm" className="text-[#D4AF37]">View Ledger</Button>
+                                                    </Link>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {(!shopLedgers || shopLedgers.length === 0) && (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="text-center py-8 text-[#6B6B6B]">No shop ledgers found.</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -215,16 +342,44 @@ export default function SalesmanDashboard() {
                 </TabsContent>
 
                 <TabsContent value="history">
-                    {/* Reuse the recent orders list from overview or create a more detailed table */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Order History</CardTitle>
+                            <CardTitle className="font-serif text-xl">Full Order History</CardTitle>
+                            <CardDescription>All orders you have created in the system</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-muted-foreground mb-4">Detailed order history coming soon.</p>
-                            {/* Placeholder for now, duplicates overview list essentially */}
+                            {historyLoading ? (
+                                <div className="text-center py-12"><Clock className="animate-spin mx-auto mb-2" /> Loading History...</div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {orderHistory.map((order: any) => (
+                                        <div
+                                            key={order.id}
+                                            onClick={() => handleViewDetails(order.id)}
+                                            className="flex justify-between items-center p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
+                                        >
+                                            <div>
+                                                <p className="font-mono font-bold group-hover:text-[#D4AF37]">#{order.order_number}</p>
+                                                <p className="text-sm text-[#6B6B6B]">{order.user?.full_name}</p>
+                                                <p className="text-xs text-[#8C8C8C]">{new Date(order.created_at).toLocaleDateString()}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-bold">₹{Number(order.total_amount).toLocaleString()}</p>
+                                                <Badge variant={order.payment_status === "paid" ? "default" : "destructive"} className="text-[10px]">
+                                                    {order.payment_status?.toUpperCase()}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {orderHistory.length === 0 && <p className="text-center py-8 text-muted-foreground">No history found.</p>}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                <TabsContent value="requests">
+                    <PaymentRequestManagement salesmanId={user?.id} />
                 </TabsContent>
 
                 <TabsContent value="profile">
@@ -233,16 +388,120 @@ export default function SalesmanDashboard() {
                             <ProfileForm
                                 user={user}
                                 initialData={{
-                                    full_name: user.full_name || "",
-                                    phone: user.phone || "",
-                                    email: user.email || "",
-                                    role: user.role || ""
+                                    full_name: user?.full_name || "",
+                                    email: user?.email || "",
+                                    phone: user?.phone || "",
+                                    role: user?.role || "salesman",
                                 }}
                             />
                         )}
                     </div>
                 </TabsContent>
             </Tabs>
-        </div>
+
+            {/* Order Details Modal */}
+            <Dialog open={orderModalOpen} onOpenChange={setOrderModalOpen}>
+                <DialogContent className="max-w-3xl max-h-[90vh]">
+                    <DialogHeader>
+                        <DialogTitle className="font-serif text-2xl">Order Details</DialogTitle>
+                        <DialogDescription>
+                            Order #{selectedOrder?.order_number} • {new Date(selectedOrder?.created_at).toLocaleDateString()}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedOrder && (
+                        <ScrollArea className="pr-4">
+                            <div className="space-y-6">
+                                <section className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                                    <div>
+                                        <p className="text-xs uppercase text-[#6B6B6B] font-semibold">Client Details</p>
+                                        <p className="font-bold">{selectedOrder.user?.full_name}</p>
+                                        <p className="text-sm text-[#6B6B6B]">{selectedOrder.user?.phone || 'No Phone'}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs uppercase text-[#6B6B6B] font-semibold">Status</p>
+                                        <div className="flex justify-end gap-2 mt-1">
+                                            <Badge variant="default">{selectedOrder.status?.toUpperCase()}</Badge>
+                                            <Badge variant={selectedOrder.payment_status === 'paid' ? 'default' : 'destructive'}>
+                                                {selectedOrder.payment_status?.toUpperCase()}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="font-semibold mb-2">Order Items</h3>
+                                    <div className="border rounded-lg overflow-hidden">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Product</TableHead>
+                                                    <TableHead className="text-center">Qty</TableHead>
+                                                    <TableHead className="text-right">Price</TableHead>
+                                                    <TableHead className="text-right">Total</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {selectedOrder.items?.map((item: any, i: number) => (
+                                                    <TableRow key={i}>
+                                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                                        <TableCell className="text-center">{item.quantity}</TableCell>
+                                                        <TableCell className="text-right">₹{item.price}</TableCell>
+                                                        <TableCell className="text-right font-bold">₹{item.total}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </section>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <section>
+                                        <h3 className="font-semibold mb-2">Financial Summary</h3>
+                                        <div className="space-y-1 text-sm border p-4 rounded-lg bg-gray-50/50">
+                                            <div className="flex justify-between">
+                                                <span>Total Bill:</span>
+                                                <span className="font-bold">₹{Number(selectedOrder.total_amount).toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between text-green-600">
+                                                <span>Total Paid:</span>
+                                                <span className="font-bold">₹{Number(selectedOrder.paid_amount).toLocaleString()}</span>
+                                            </div>
+                                            <Separator className="my-2" />
+                                            <div className="flex justify-between text-lg text-red-600 font-bold">
+                                                <span>Remaining:</span>
+                                                <span>₹{Number(selectedOrder.pending_amount).toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section>
+                                        <h3 className="font-semibold mb-2">Payment History</h3>
+                                        <div className="space-y-2 max-h-40 overflow-y-auto border p-4 rounded-lg bg-gray-50/50">
+                                            {selectedOrder.payments?.map((p: any) => (
+                                                <div key={p.id} className="text-xs flex justify-between border-b pb-1 last:border-0">
+                                                    <span>{new Date(p.created_at).toLocaleDateString()}</span>
+                                                    <span className="font-bold text-green-600">₹{p.amount}</span>
+                                                    <span className="text-[#6B6B6B] italic">{p.payment_method}</span>
+                                                </div>
+                                            ))}
+                                            {(!selectedOrder.payments || selectedOrder.payments.length === 0) && (
+                                                <p className="text-xs text-center py-4 text-[#6B6B6B]">No payment records found.</p>
+                                            )}
+                                        </div>
+                                    </section>
+                                </div>
+                                {selectedOrder.notes && (
+                                    <section>
+                                        <p className="text-xs font-semibold text-[#6B6B6B] uppercase mb-1">Notes</p>
+                                        <p className="text-sm border p-3 rounded bg-yellow-50/30">{selectedOrder.notes}</p>
+                                    </section>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </div >
     );
 }

@@ -18,6 +18,9 @@ interface PaymentRecordModalProps {
     pendingAmount: number;
     onPaymentRecorded?: () => void;
     recordPaymentAction: (orderId: string, amount: number, method: string, notes: string) => Promise<{ success?: boolean; error?: string }>;
+    title?: string;
+    description?: string;
+    buttonText?: string;
 }
 
 export function PaymentRecordModal({
@@ -28,6 +31,9 @@ export function PaymentRecordModal({
     pendingAmount,
     onPaymentRecorded,
     recordPaymentAction,
+    title = "Record Payment",
+    description,
+    buttonText = "Record Payment",
 }: PaymentRecordModalProps) {
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
@@ -120,10 +126,10 @@ export function PaymentRecordModal({
                     <DialogHeader>
                         <DialogTitle className="font-serif text-2xl flex items-center gap-2">
                             <DollarSign className="h-6 w-6 text-[#2D5F3F]" />
-                            Record Payment
+                            {title}
                         </DialogTitle>
                         <DialogDescription>
-                            Record a partial or full payment for order <span className="font-mono font-medium">{orderNumber}</span>
+                            {description || `Record a partial or full payment for order `} <span className="font-mono font-medium">{orderNumber}</span>
                         </DialogDescription>
                     </DialogHeader>
 
@@ -219,7 +225,7 @@ export function PaymentRecordModal({
                             className="bg-[#2D5F3F] hover:bg-[#234a32]"
                         >
                             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Record Payment
+                            {buttonText}
                         </Button>
                     </DialogFooter>
                 </form>

@@ -21,7 +21,19 @@ export default async function ProductDetailPage({
   // Fetch product by slug
   const { data: product, error } = await supabase
     .from("products")
-    .select("*")
+    .select(`
+      *,
+      brands (
+        name,
+        name,
+        slug,
+        logo_url
+      ),
+      categories (
+        name,
+        slug
+      )
+    `)
     .eq("slug", params.slug)
     .single();
 
@@ -61,6 +73,17 @@ export default async function ProductDetailPage({
             Store
           </Link>
           <span>/</span>
+          {product.categories && (
+            <>
+              <Link
+                href={`/store?category=${product.categories.slug}`}
+                className="hover:text-[#D4AF37]"
+              >
+                {product.categories.name}
+              </Link>
+              <span>/</span>
+            </>
+          )}
           <span className="text-gray-900">{product.name}</span>
         </nav>
 
@@ -75,6 +98,39 @@ export default async function ProductDetailPage({
           {/* Right: Product Info */}
           <div className="space-y-6">
             <div>
+              {product.brands && (
+                <div className="bg-white rounded-xl border border-[#D4AF37]/20 p-4 mb-6 shadow-sm flex items-center justify-between group hover:border-[#D4AF37] transition-all duration-300">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded-lg bg-gray-50 flex items-center justify-center p-2 border border-charcoal/5">
+                      {product.brands.logo_url ? (
+                        <img
+                          src={product.brands.logo_url}
+                          alt={product.brands.name}
+                          className="object-contain max-h-full max-w-full"
+                        />
+                      ) : (
+                        <span className="font-display font-bold text-2xl text-[#D4AF37]">
+                          {product.brands.name.charAt(0)}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-charcoal-light font-medium uppercase tracking-wider mb-0.5">
+                        Official Brand
+                      </p>
+                      <h3 className="font-display font-bold text-lg text-charcoal group-hover:text-[#D4AF37] transition-colors">
+                        {product.brands.name}
+                      </h3>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/store?brand=${product.brands.slug}`}
+                    className="button-secondary text-xs px-4 py-2"
+                  >
+                    Visit Store
+                  </Link>
+                </div>
+              )}
               <h1 className="font-display text-4xl font-bold text-[#1A1A1A] mb-2">
                 {product.name}
               </h1>

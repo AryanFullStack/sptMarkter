@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
  */
 export async function getPendingLimitInfo(userId: string) {
   const supabase = createAdminClient();
+  if (!supabase) return { error: "Admin client unavailable" };
 
   // Get user's pending limit
   const { data: user, error: userError } = await supabase
@@ -66,6 +67,7 @@ export async function updatePendingLimit(userId: string, newLimit: number) {
 
   // Verify admin role
   const supabaseAdmin = createAdminClient();
+  if (!supabaseAdmin) return { error: "Admin client unavailable" };
   const { data: userData } = await supabaseAdmin
     .from("users")
     .select("role")
@@ -110,6 +112,7 @@ export async function validateCheckoutPendingLimit(
   paidAmount: number
 ) {
   const supabase = createAdminClient();
+  if (!supabase) return { valid: false, error: "Admin client unavailable" };
 
   // Get user info
   const { data: user } = await supabase
@@ -133,8 +136,8 @@ export async function validateCheckoutPendingLimit(
   // Get current pending amount
   const limitInfo = await getPendingLimitInfo(userId);
   
-  if (limitInfo.error) {
-    return { valid: false, error: limitInfo.error };
+  if (limitInfo.error || limitInfo.currentPending == null || limitInfo.pendingAmountLimit == null) {
+    return { valid: false, error: (limitInfo.error as string) || "Failed to fetch limit info" };
   }
 
   const totalPendingAfterOrder = limitInfo.currentPending + newPending;

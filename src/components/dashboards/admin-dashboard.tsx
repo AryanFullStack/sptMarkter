@@ -49,6 +49,7 @@ import { UsersTable } from "./users-table";
 import { BrandsManager } from "./brands-manager";
 import { SalesmanManagement } from "@/components/admin/salesman-management";
 import { LedgerReports } from "@/components/admin/ledger-reports";
+import { PaymentRequestManagement } from "../shared/payment-request-management";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -356,49 +357,56 @@ export default function AdminDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {pendingPaymentOrders.length === 0 ? (
-                <div className="text-center py-12 text-[#6B6B6B]">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50 text-[#2D5F3F]" />
-                  <p>No pending payments found.</p>
+              <div className="space-y-8">
+                <PaymentRequestManagement />
+
+                <div className="border-t pt-8">
+                  <h3 className="font-serif text-xl mb-4">Old Pending Orders (Direct)</h3>
+                  {pendingPaymentOrders.length === 0 ? (
+                    <div className="text-center py-12 text-[#6B6B6B]">
+                      <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50 text-[#2D5F3F]" />
+                      <p>No other pending payments found.</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Order ID</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Total Amount</TableHead>
+                          <TableHead>Paid</TableHead>
+                          <TableHead>Pending</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pendingPaymentOrders.map((order) => (
+                          <TableRow key={order.id}>
+                            <TableCell className="font-mono text-sm">{order.order_number || order.id.slice(0, 8)}</TableCell>
+                            <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
+                            <TableCell>₹{Number(order.total_amount).toLocaleString()}</TableCell>
+                            <TableCell className="text-[#2D5F3F]">₹{Number(order.paid_amount).toLocaleString()}</TableCell>
+                            <TableCell className="text-[#C77D2E] font-bold">₹{Number(order.pending_amount).toLocaleString()}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="capitalize">{order.status.replace("_", " ")}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                className="bg-[#2D5F3F] hover:bg-[#1E422B] text-white"
+                                onClick={() => handleMarkPaid(order.id, order.total_amount)}
+                              >
+                                Mark Paid
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order ID</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Total Amount</TableHead>
-                      <TableHead>Paid</TableHead>
-                      <TableHead>Pending</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingPaymentOrders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell className="font-mono text-sm">{order.order_number || order.id.slice(0, 8)}</TableCell>
-                        <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
-                        <TableCell>₹{Number(order.total_amount).toLocaleString()}</TableCell>
-                        <TableCell className="text-[#2D5F3F]">₹{Number(order.paid_amount).toLocaleString()}</TableCell>
-                        <TableCell className="text-[#C77D2E] font-bold">₹{Number(order.pending_amount).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize">{order.status.replace("_", " ")}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            className="bg-[#2D5F3F] hover:bg-[#1E422B] text-white"
-                            onClick={() => handleMarkPaid(order.id, order.total_amount)}
-                          >
-                            Mark Paid
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -11,14 +11,33 @@ export default async function StorePage({
 }) {
   const supabase = await createClient();
 
-  // Fetch products
-  const { data: products, error: productsError } = await supabase
-    .from("products")
-    .select("*");
-
-  // Fetch brands and categories for filters
+  // Fetch brands and categories for filters first to resolve slugs
   const { data: brands } = await supabase.from("brands").select("*");
   const { data: categories } = await supabase.from("categories").select("*");
+
+  // Build query
+  let query = supabase.from("products").select("*");
+
+  if (searchParams.category) {
+    const category = categories?.find(c => c.slug === searchParams.category);
+    if (category) {
+      query = query.eq("category_id", category.id);
+    }
+  }
+
+  if (searchParams.brand) {
+    const brand = brands?.find(b => b.slug === searchParams.brand);
+    if (brand) {
+      query = query.eq("brand_id", brand.id);
+    }
+  }
+
+  if (searchParams.search) {
+    query = query.ilike("name", `%${searchParams.search}%`);
+  }
+
+  // Fetch products
+  const { data: products, error: productsError } = await query;
 
   if (productsError) {
     console.error("❌ Store - Error fetching products:", productsError);
@@ -42,7 +61,7 @@ export default async function StorePage({
 
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Filters Sidebar */}
-          <aside className="lg:w-64 flex-shrink-0">
+          <aside className="lg:w-64 flex-shrink-0 sticky top-24 h-fit">
             <StoreFilters brands={brands || []} categories={categories || []} />
           </aside>
 
