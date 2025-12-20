@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Eye, DollarSign, User } from "lucide-react";
-import { loadAdminOrdersAction, updateOrderStatusAction } from "@/app/admin/actions";
+import { loadAdminOrdersAction, updateOrderStatusAction, recordPayment as recordPaymentAction } from "@/app/admin/actions";
 import { useToast } from "@/hooks/use-toast";
 
 export default function OrdersManagementPage() {
@@ -100,10 +100,10 @@ export default function OrdersManagementPage() {
       const updated = orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
       setOrders(updated);
       // Re-apply filter? Simplified: just update filtered list too if it contains it
-      setFilteredOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      setFilteredOrders((prev: any[]) => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
 
       if (selectedOrder?.id === orderId) {
-        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+        setSelectedOrder((prev: any) => ({ ...prev, status: newStatus }));
       }
       toast({ title: "Status Updated", description: `Order status changed to ${newStatus}` });
     } catch (error) {
@@ -115,26 +115,31 @@ export default function OrdersManagementPage() {
   async function recordPayment() {
     if (!selectedOrder) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      await recordPaymentAction({
+        order_id: selectedOrder.id,
+        amount: paymentAmount,
+        payment_method: paymentMethod,
+        notes: paymentNotes,
+      });
 
-    await supabase.from("payments").insert({
-      order_id: selectedOrder.id,
-      amount: paymentAmount,
-      payment_method: paymentMethod,
-      recorded_by: user?.id,
-      notes: paymentNotes,
-    });
+      toast({
+        title: "Payment Recorded",
+        description: `Payment of Rs. ${paymentAmount} recorded successfully`
+      });
 
-    const newPaidAmount = Number(selectedOrder.paid_amount) + paymentAmount;
-    await supabase
-      .from("orders")
-      .update({ paid_amount: newPaidAmount })
-      .eq("id", selectedOrder.id);
-
-    setIsPaymentOpen(false);
-    setPaymentAmount(0);
-    setPaymentNotes("");
-    loadOrders();
+      setIsPaymentOpen(false);
+      setPaymentAmount(0);
+      setPaymentNotes("");
+      loadOrders();
+    } catch (error: any) {
+      console.error("Payment recording failed:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to record payment",
+        variant: "destructive"
+      });
+    }
   }
 
   const getStatusColor = (status: string) => {
