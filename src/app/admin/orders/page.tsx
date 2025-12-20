@@ -233,10 +233,10 @@ export default function OrdersManagementPage() {
                         <Badge variant="outline" className="capitalize">{order.users?.role?.replace("_", " ") || "N/A"}</Badge>
                       </TableCell>
                       <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell>₹{order.total_amount?.toFixed(2)}</TableCell>
-                      <TableCell>₹{order.paid_amount?.toFixed(2)}</TableCell>
+                      <TableCell>Rs. {order.total_amount?.toFixed(2)}</TableCell>
+                      <TableCell>Rs. {order.paid_amount?.toFixed(2)}</TableCell>
                       <TableCell className="text-[#C77D2E]">
-                        ₹{(order.total_amount - order.paid_amount).toFixed(2)}
+                        Rs. {(order.total_amount - order.paid_amount).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
@@ -352,7 +352,7 @@ export default function OrdersManagementPage() {
                               <span className="font-semibold w-6 text-center">{qty}x</span>
                               <span className="text-gray-700">{name}</span>
                             </div>
-                            <span className="font-medium">₹{(price * qty).toFixed(2)}</span>
+                            <span className="font-medium">Rs. {(price * qty).toFixed(2)}</span>
                           </div>
                         );
                       });
@@ -363,16 +363,16 @@ export default function OrdersManagementPage() {
                 <div className="grid md:grid-cols-3 gap-4">
                   <div>
                     <Label>Total Amount</Label>
-                    <p className="text-lg font-semibold">₹{selectedOrder.total_amount?.toFixed(2)}</p>
+                    <p className="text-lg font-semibold">Rs. {selectedOrder.total_amount?.toFixed(2)}</p>
                   </div>
                   <div>
                     <Label>Paid Amount</Label>
-                    <p className="text-lg font-semibold text-[#2D5F3F]">₹{selectedOrder.paid_amount?.toFixed(2)}</p>
+                    <p className="text-lg font-semibold text-[#2D5F3F]">Rs. {selectedOrder.paid_amount?.toFixed(2)}</p>
                   </div>
                   <div>
                     <Label>Pending Amount</Label>
                     <p className="text-lg font-semibold text-[#C77D2E]">
-                      ₹{(selectedOrder.total_amount - selectedOrder.paid_amount).toFixed(2)}
+                      Rs. {(selectedOrder.total_amount - selectedOrder.paid_amount).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -395,7 +395,7 @@ export default function OrdersManagementPage() {
                 <div>
                   <Label>Pending Amount</Label>
                   <p className="text-lg font-semibold text-[#C77D2E]">
-                    ₹{(selectedOrder.total_amount - selectedOrder.paid_amount).toFixed(2)}
+                    Rs. {(selectedOrder.total_amount - selectedOrder.paid_amount).toFixed(2)}
                   </p>
                 </div>
                 <div>

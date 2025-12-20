@@ -145,7 +145,7 @@ export default function CreateOrderPage() {
         if (pendingLimit > 0 && newTotalPending > pendingLimit) {
             setLimitCheck({
                 valid: false,
-                message: `Pending Limit Exceeded! Available: ₹${Math.max(0, pendingLimit - currentPending).toLocaleString()}, Order Balance: ₹${additionalPending.toLocaleString()}`
+                message: `Pending Limit Exceeded! Available: Rs. ${Math.max(0, pendingLimit - currentPending).toLocaleString()}, Order Balance: Rs. ${additionalPending.toLocaleString()}`
             });
         } else {
             setLimitCheck({ valid: true });
@@ -240,7 +240,7 @@ export default function CreateOrderPage() {
                                             <div className="p-3 flex-grow flex flex-col justify-between">
                                                 <div>
                                                     <h3 className="font-medium line-clamp-1">{product.name}</h3>
-                                                    <p className="font-bold text-[#C77D2E]">₹{price}</p>
+                                                    <p className="font-bold text-[#C77D2E]">Rs. {price}</p>
                                                 </div>
 
                                                 {inCart ? (
@@ -283,10 +283,10 @@ export default function CreateOrderPage() {
                                             <div key={item.id} className="flex justify-between text-sm py-1 border-b last:border-0">
                                                 <div className="flex-1">
                                                     <p className="font-medium">{item.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{item.quantity} x ₹{item.price}</p>
+                                                    <p className="text-xs text-muted-foreground">{item.quantity} x Rs. {item.price}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="font-medium">₹{item.price * item.quantity}</span>
+                                                    <span className="font-medium">Rs. {item.price * item.quantity}</span>
                                                     <Trash className="h-3 w-3 text-red-400 cursor-pointer" onClick={() => removeFromCart(item.id)} />
                                                 </div>
                                             </div>
@@ -299,7 +299,7 @@ export default function CreateOrderPage() {
                                 <div className="space-y-3">
                                     <div className="flex justify-between text-lg font-bold">
                                         <span>Total Amount</span>
-                                        <span>₹{totalAmount.toLocaleString()}</span>
+                                        <span>Rs. {totalAmount.toLocaleString()}</span>
                                     </div>
 
                                     <div className="space-y-1">
@@ -333,7 +333,7 @@ export default function CreateOrderPage() {
                                         <div className="flex justify-between items-center">
                                             <label className="text-xs font-semibold uppercase text-muted-foreground">Amount Collected</label>
                                         </div>    <div className="relative">
-                                            <span className="absolute left-3 top-2.5 text-gray-500">₹</span>
+                                            <span className="absolute left-3 top-2.5 text-gray-500">Rs.</span>
                                             <Input
                                                 type="number"
                                                 value={collectedAmount || ''}
@@ -361,7 +361,7 @@ export default function CreateOrderPage() {
                                     <div className="flex justify-between text-sm font-medium pt-2 border-t">
                                         <span>New Pending Balance</span>
                                         <span className={newPendingAmount > 0 ? "text-red-600" : "text-green-600"}>
-                                            ₹{newPendingAmount.toLocaleString()}
+                                            Rs.{newPendingAmount.toLocaleString()}
                                         </span>
                                     </div>
 

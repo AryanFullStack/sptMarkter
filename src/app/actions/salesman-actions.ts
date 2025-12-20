@@ -188,7 +188,7 @@ export async function canCreateOrder(
   if (totalPendingAfterOrder > pendingLimit) {
     return {
       valid: false,
-      error: `Pending limit would be exceeded. Current: ₹${currentPending.toLocaleString()}, New order pending: ₹${newPending.toLocaleString()}, Limit: ₹${pendingLimit.toLocaleString()}. Total after order: ₹${totalPendingAfterOrder.toLocaleString()}`,
+      error: `Pending limit would be exceeded. Current: Rs. ${currentPending.toLocaleString()}, New order pending: Rs. ${newPending.toLocaleString()}, Limit: Rs. ${pendingLimit.toLocaleString()}. Total after order: Rs. ${totalPendingAfterOrder.toLocaleString()}`,
       currentPending,
       newPending,
       pendingLimit,
@@ -400,26 +400,18 @@ export async function recordPartialPayment(
   const supabase = createAdminClient();
   if (!supabase) throw new Error("Admin client unavailable");
 
-  // Verify salesman role
   const { data: userData } = await supabase
     .from("users")
     .select("role")
     .eq("id", user.id)
     .single();
 
-  if (userData?.role !== "salesman") {
-    return { error: "Unauthorized: Salesman access required" };
-  }
+  const userRole = userData?.role || "";
 
-  // Validate amount
-  if (amount <= 0) {
-    return { error: "Payment amount must be greater than 0" };
-  }
-
-  // Get order details
+  // Get order details for validation
   const { data: order } = await supabase
     .from("orders")
-    .select("id, pending_amount, payment_status")
+    .select("id, user_id, pending_amount, payment_status")
     .eq("id", orderId)
     .single();
 
@@ -427,8 +419,27 @@ export async function recordPartialPayment(
     return { error: "Order not found" };
   }
 
+  // Permission check:
+  // 1. Admin/Sub-Admin/Salesman can record for any order (as long as they have access to the client)
+  // 2. Retailer/Parlor can ONLY record (request) for THEIR OWN order, and status must be 'pending' (requesting)
+  const isStaff = ["admin", "sub_admin", "salesman"].includes(userRole);
+  const isOwner = order.user_id === user.id;
+
+  if (!isStaff && !isOwner) {
+    return { error: "Unauthorized: You can only record payments for your own orders" };
+  }
+
+  if (!isStaff && status !== "pending") {
+    return { error: "Unauthorized: Clients can only submit payment requests for approval" };
+  }
+
+  // Validate amount
+  if (amount <= 0) {
+    return { error: "Payment amount must be greater than 0" };
+  }
+
   if (amount > Number(order.pending_amount)) {
-    return { error: `Payment amount (₹${amount}) exceeds pending amount (₹${order.pending_amount})` };
+    return { error: `Payment amount (Rs. ${amount}) exceeds pending amount (Rs. ${order.pending_amount})` };
   }
 
   // Record payment
@@ -444,6 +455,11 @@ export async function recordPartialPayment(
   if (paymentError) {
     console.error("Error recording payment:", paymentError);
     return { error: "Failed to record payment" };
+  }
+
+  // UPDATE: If status is completed, update order and ledger
+  if (status === "completed") {
+    await updateOrderAndLedgerAfterPayment(supabase, orderId, amount);
   }
 
   // Log activity
@@ -575,27 +591,37 @@ export async function getSalesmanDashboardData(salesmanId: string) {
 
   // Get Shop summaries (Total Pending per Shop)
   const shopLedgersMap: Record<string, { id: string; name: string; pending: number; last_updated: string }> = {};
+  
+  // Also collect shop IDs to fetch names
+  const shopIds = Array.from(new Set(brandLedgers?.map(l => l.shop_id).filter(Boolean)));
+  
+  let shopNames: Record<string, string> = {};
+  if (shopIds.length > 0) {
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, full_name")
+      .in("id", shopIds);
+    
+    users?.forEach(u => {
+      shopNames[u.id] = u.full_name || "Unknown Shop";
+    });
+  }
+
   brandLedgers?.forEach((l: any) => {
-    const sId = l.shop_id || 'unknown'; // Note: missed shop name in select, will add in next pass if needed
-    if (!shopLedgersMap[sId]) shopLedgersMap[sId] = { id: sId, name: "Shop", pending: 0, last_updated: l.last_updated };
+    const sId = l.shop_id || 'unknown';
+    if (!shopLedgersMap[sId]) {
+      shopLedgersMap[sId] = { 
+        id: sId, 
+        name: shopNames[sId] || "Shop", 
+        pending: 0, 
+        last_updated: l.last_updated 
+      };
+    }
     shopLedgersMap[sId].pending += Number(l.pending_amount || 0);
     if (new Date(l.last_updated) > new Date(shopLedgersMap[sId].last_updated)) {
       shopLedgersMap[sId].last_updated = l.last_updated;
     }
   });
-
-  // To get shop names, we need a better query or a separate fetch
-  const shopIds = Array.from(new Set(brandLedgers?.map(l => l.shop_id).filter(Boolean)));
-  if (shopIds.length > 0) {
-    const { data: shopNames } = await supabase
-      .from("users")
-      .select("id, full_name")
-      .in("id", shopIds);
-    
-    shopNames?.forEach(s => {
-      if (shopLedgersMap[s.id]) shopLedgersMap[s.id].name = s.full_name || "Unnamed Shop";
-    });
-  }
 
   // Get recent activity
   const activity = await getSalesmanActivity(salesmanId);
@@ -634,7 +660,6 @@ export async function getSalesmanOrderHistory(salesmanId: string, limit = 50, of
       payment_status,
       status,
       created_at,
-      brand_id,
       user:user_id (
         id,
         full_name,
@@ -755,7 +780,7 @@ export async function getPaymentRequests(salesmanId?: string) {
         order_number,
         total_amount,
         pending_amount,
-        brand:brand_id (name),
+        items,
         user:user_id (id, full_name, role),
         recorded_by_user:recorded_by (full_name)
       )
@@ -764,16 +789,30 @@ export async function getPaymentRequests(salesmanId?: string) {
     .order("created_at", { ascending: false });
 
   if (salesmanId) {
-    // Note: This relies on orders having brand_id or recorded_by linked to salesman
-    // For now, let's filter by recorded_by or client's assigned salesman
-    // A better way is to join orders and check assigned_salesman_id
-    // But since we can't easily do complex joins in supabase client without views:
-    const { data: orders } = await supabase
+    // 1. Get all orders recorded by this salesman
+    const { data: recordedOrders } = await supabase
       .from("orders")
       .select("id")
       .eq("recorded_by", salesmanId);
     
-    const orderIds = orders?.map(o => o.id) || [];
+    // 2. Get all clients assigned to this salesman
+    const { data: assignedClients } = await supabase
+      .from("users")
+      .select("id")
+      .eq("assigned_salesman_id", salesmanId);
+    
+    // 3. Get all orders for those assigned clients
+    const clientIds = assignedClients?.map(c => c.id) || [];
+    const { data: clientOrders } = await supabase
+      .from("orders")
+      .select("id")
+      .in("user_id", clientIds);
+
+    const orderIds = Array.from(new Set([
+        ...(recordedOrders?.map(o => o.id) || []),
+        ...(clientOrders?.map(o => o.id) || [])
+    ]));
+
     if (orderIds.length > 0) {
       query = query.in("order_id", orderIds);
     } else {
@@ -828,9 +867,145 @@ export async function approvePaymentRequest(paymentId: string) {
     return { error: "Failed to approve payment" };
   }
 
+  // UPDATE: Update order and ledger amounts
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("order_id, amount")
+    .eq("id", paymentId)
+    .single();
+
+  if (payment) {
+    await updateOrderAndLedgerAfterPayment(supabase, payment.order_id, payment.amount);
+  }
+
   revalidatePath("/admin");
   revalidatePath("/salesman");
   revalidatePath("/dashboard");
 
   return { success: true };
+}
+
+/**
+ * Internal helper to update order and ledger after a payment is finalized
+ */
+async function updateOrderAndLedgerAfterPayment(supabase: any, orderId: string, amount: number) {
+  try {
+    // 1. Get order details
+    const { data: order, error: orderFetchError } = await supabase
+      .from("orders")
+      .select("id, user_id, total_amount, paid_amount, pending_amount, recorded_by, items")
+      .eq("id", orderId)
+      .single();
+
+    if (orderFetchError || !order) {
+      console.error("Order fetch error for update:", orderFetchError);
+      return;
+    }
+
+    const currentPaid = Number(order.paid_amount || 0);
+    const newPaidAmount = currentPaid + amount;
+    const newPendingAmount = Math.max(0, Number(order.total_amount) - newPaidAmount);
+
+    // 2. Update order
+    const { error: orderUpdateError } = await supabase
+      .from("orders")
+      .update({
+        paid_amount: newPaidAmount,
+        pending_amount: newPendingAmount,
+        payment_status: newPaidAmount >= Number(order.total_amount) ? "paid" : "partial"
+      })
+      .eq("id", orderId);
+    
+    if (orderUpdateError) {
+        console.error("Order update error:", orderUpdateError);
+    }
+
+    // 3. Update Salesman Shop Ledger
+    // Find the brand from the items (assuming all items in one order are from one brand for salesman orders)
+    let brandId = null;
+    if (order.items && Array.isArray(order.items) && order.items.length > 0) {
+        const firstItem = order.items[0];
+        // We might need to fetch the product to get the brand_id
+        if (firstItem.brand_id) {
+            brandId = firstItem.brand_id;
+        } else if (firstItem.product_id) {
+            const { data: product } = await supabase
+                .from("products")
+                .select("brand_id")
+                .eq("id", firstItem.product_id)
+                .single();
+            brandId = product?.brand_id;
+        }
+    }
+
+    if (brandId && order.recorded_by) {
+        const { data: targetLedger } = await supabase
+            .from("salesman_shop_ledger")
+            .select("*")
+            .eq("salesman_id", order.recorded_by)
+            .eq("shop_id", order.user_id)
+            .eq("brand_id", brandId)
+            .single();
+        
+        if (targetLedger) {
+            await supabase
+                .from("salesman_shop_ledger")
+                .update({
+                    total_collected: Number(targetLedger.total_collected) + amount,
+                    pending_amount: Math.max(0, Number(targetLedger.pending_amount) - amount),
+                    last_updated: new Date().toISOString()
+                })
+                .eq("id", targetLedger.id);
+        }
+    }
+  } catch (err) {
+    console.error("Failed to update order/ledger amounts:", err);
+  }
+}
+
+/**
+ * Get ledger reports for all shops (Admin use)
+ */
+export async function getShopLedgerReports() {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  // Get all shops (retailers and beauty parlors)
+  const { data: shops, error: shopsError } = await supabase
+    .from("users")
+    .select("id, full_name, phone, pending_amount_limit")
+    .in("role", ["retailer", "beauty_parlor"]);
+
+  if (shopsError) throw new Error(shopsError.message);
+
+  // Get all pending amount sums per user
+  const { data: orderSums, error: orderError } = await supabase
+    .from("orders")
+    .select("user_id, pending_amount")
+    .neq("status", "cancelled")
+    .neq("payment_status", "paid");
+
+  if (orderError) throw new Error(orderError.message);
+
+  // Map pending amounts to shop IDs
+  const pendingMap = new Map();
+  orderSums?.forEach(o => {
+    const current = pendingMap.get(o.user_id) || 0;
+    pendingMap.set(o.user_id, current + Number(o.pending_amount || 0));
+  });
+
+  const reports = shops.map(shop => {
+    const used = pendingMap.get(shop.id) || 0;
+    const limit = Number(shop.pending_amount_limit || 0);
+    return {
+      shop_id: shop.id,
+      shop_name: shop.full_name,
+      shop_phone: shop.phone,
+      pending_amount_limit: limit,
+      total_pending_used: used,
+      remaining_limit: Math.max(0, limit - used)
+    };
+  });
+
+  return { reports };
 }

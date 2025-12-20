@@ -107,14 +107,19 @@ export function PaymentRequestManagement({ salesmanId }: PaymentRequestManagemen
                                         <div className="flex flex-col">
                                             <span className="font-mono text-xs">#{req.order?.order_number}</span>
                                             <span className="text-xs flex items-center gap-1 text-purple-600">
-                                                <Tag className="h-3 w-3" /> {req.order?.brand?.name || "N/A"}
+                                                <Tag className="h-3 w-3" /> {
+                                                    req.order?.brand?.name ||
+                                                    (req.order?.items && Array.isArray(req.order.items) && req.order.items.length > 0
+                                                        ? (req.order.items[0].brand_name || "Assigned Brand")
+                                                        : "N/A")
+                                                }
                                             </span>
                                         </div>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-col">
-                                            <span className="font-bold text-green-600">₹{req.amount.toLocaleString()}</span>
-                                            <span className="text-[10px] text-muted-foreground">Total: ₹{req.order?.total_amount?.toLocaleString()}</span>
+                                            <span className="font-bold text-green-600">Rs. {req.amount.toLocaleString()}</span>
+                                            <span className="text-[10px] text-muted-foreground">Total: Rs. {req.order?.total_amount?.toLocaleString()}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>

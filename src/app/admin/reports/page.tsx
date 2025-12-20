@@ -263,7 +263,7 @@ export default function ReportsPage() {
                 <YAxis stroke="#6B6B6B" />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="revenue" stroke="#D4AF37" strokeWidth={2} name="Revenue (₹)" />
+                <Line type="monotone" dataKey="revenue" stroke="#D4AF37" strokeWidth={2} name="Revenue (PKR)" />
                 <Line type="monotone" dataKey="orders" stroke="#2D5F3F" strokeWidth={2} name="Orders" />
               </LineChart>
             </ResponsiveContainer>

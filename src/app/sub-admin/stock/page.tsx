@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable, Column } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
-import { Package } from "lucide-react";
+import { Package, Search, Filter, ArrowUpRight, ArrowDownRight, RefreshCw, AlertCircle, Warehouse, Layers } from "lucide-react";
 import { adjustStock } from "@/app/admin/actions";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SubAdminStockPage() {
     const [products, setProducts] = useState<any[]>([]);
@@ -17,19 +19,25 @@ export default function SubAdminStockPage() {
     const [adjustingProduct, setAdjustingProduct] = useState<any>(null);
     const [adjustment, setAdjustment] = useState({ quantity: 0, reason: "" });
     const supabase = createClient();
+    const { toast } = useToast();
 
     useEffect(() => {
         loadProducts();
     }, []);
 
     async function loadProducts() {
-        // Sub-admins might have assigned brands - for now show all
-        const { data } = await supabase
-            .from("products")
-            .select("id, name, stock_quantity, brand:brands(name)")
-            .order("name");
+        setLoading(true);
+        try {
+            const { data } = await supabase
+                .from("products")
+                .select("id, name, stock_quantity, brand:brands(name)")
+                .order("name");
 
-        setProducts(data || []);
+            setProducts(data || []);
+        } catch (error) {
+            console.error("Error loading products:", error);
+            toast({ title: "Error", description: "Failed to load product registry", variant: "destructive" });
+        }
         setLoading(false);
     }
 
@@ -38,129 +46,177 @@ export default function SubAdminStockPage() {
 
         try {
             await adjustStock(adjustingProduct.id, adjustment.quantity, adjustment.reason);
+            toast({ title: "Registry Updated", description: `${adjustingProduct.name} stock adjusted by ${adjustment.quantity} units.` });
             setAdjustingProduct(null);
             setAdjustment({ quantity: 0, reason: "" });
             loadProducts();
         } catch (error) {
             console.error("Error adjusting stock:", error);
-            alert("Failed to adjust stock");
+            toast({ title: "Action Failed", description: "Failed to update inventory record", variant: "destructive" });
         }
     };
 
     const columns: Column<any>[] = [
         {
             key: "name",
-            header: "Product",
+            header: "Product / Brand",
             sortable: true,
             render: (p) => (
-                <div>
-                    <p className="font-medium">{p.name}</p>
-                    <p className="text-sm text-[#6B6B6B]">{p.brand?.name}</p>
+                <div className="flex flex-col">
+                    <p className="font-bold text-[#1A1A1A]">{p.name}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-[#2D5F3F] font-bold mt-0.5">{p.brand?.name || "Global Brand"}</p>
                 </div>
             ),
         },
         {
             key: "stock_quantity",
-            header: "Current Stock",
+            header: "Current Inventory",
             sortable: true,
-            render: (p) => (
-                <Badge variant="outline">{p.stock_quantity || 0} units</Badge>
-            ),
+            render: (p) => {
+                const isLow = (p.stock_quantity || 0) < 10;
+                return (
+                    <div className="flex items-center gap-3">
+                        <Badge variant="outline" className={cn(
+                            "px-3 py-1 font-mono font-bold",
+                            isLow ? "bg-red-50 text-red-700 border-red-100" : "bg-[#FDFCF9] text-[#1A1A1A] border-[#E8E8E8]"
+                        )}>
+                            {p.stock_quantity || 0} units
+                        </Badge>
+                        {isLow && <AlertCircle className="h-4 w-4 text-red-500 animate-pulse" />}
+                    </div>
+                );
+            },
         },
         {
             key: "actions",
-            header: "Actions",
+            header: "Operational Control",
             render: (p) => (
-                <Button size="sm" onClick={() => setAdjustingProduct(p)}>
-                    Adjust
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="group border border-transparent hover:border-[#2D5F3F] hover:bg-white text-[#2D5F3F] transition-all font-bold"
+                    onClick={() => setAdjustingProduct(p)}
+                >
+                    <RefreshCw className="h-4 w-4 mr-2 group-hover:rotate-180 transition-transform duration-500" />
+                    Adjust Registry
                 </Button>
             ),
         },
     ];
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A]">
-                    Stock Management
-                </h1>
-                <p className="text-[#6B6B6B] mt-2">
-                    Manage inventory for assigned products
-                </p>
+        <div className="space-y-10">
+            {/* Page Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#E8E8E8] pb-8">
+                <div>
+                    <h1 className="font-serif text-4xl font-bold text-[#1A1A1A] tracking-tight">Product Registry</h1>
+                    <p className="text-[#6B6B6B] mt-1 text-lg flex items-center gap-2">
+                        <Warehouse className="h-5 w-5 text-[#2D5F3F]" />
+                        Inventory management and stock audit desk
+                    </p>
+                </div>
+                <div className="flex gap-4">
+                    <div className="flex flex-col items-end">
+                        <p className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest">Global SKUs</p>
+                        <p className="text-2xl font-bold text-[#1A1A1A]">{products?.length || 0}</p>
+                    </div>
+                </div>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="font-serif text-2xl flex items-center gap-2">
-                        <Package className="h-6 w-6" />
-                        Products
-                    </CardTitle>
+            <Card className="border-none shadow-sm overflow-hidden">
+                <CardHeader className="bg-[#F7F5F2]/50 border-b border-[#E8E8E8] px-8 py-8">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle className="font-serif text-2xl">Inventory Stream</CardTitle>
+                            <CardDescription>Live tracking of all product stock levels</CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="icon" className="h-10 w-10 border-[#E8E8E8] bg-white"><Filter className="h-4 w-4 text-[#6B6B6B]" /></Button>
+                            <Button variant="outline" size="icon" className="h-10 w-10 border-[#E8E8E8] bg-white" onClick={loadProducts}><RefreshCw className="h-4 w-4 text-[#6B6B6B]" /></Button>
+                        </div>
+                    </div>
                 </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <div className="text-center py-12 text-[#6B6B6B]">Loading...</div>
-                    ) : (
-                        <DataTable
-                            data={products}
-                            columns={columns}
-                            searchable
-                            searchPlaceholder="Search products..."
-                        />
-                    )}
+                <CardContent className="p-0">
+                    <div className="p-4 lg:p-8">
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center py-24 gap-4">
+                                <div className="w-12 h-12 border-4 border-[#FDFCF9] border-t-[#2D5F3F] rounded-full animate-spin" />
+                                <p className="text-[#6B6B6B] font-medium italic">Scanning Registry...</p>
+                            </div>
+                        ) : (
+                            <DataTable
+                                data={products}
+                                columns={columns}
+                                searchable
+                                searchPlaceholder="Track product name or brand..."
+                                className="border-none"
+                            />
+                        )}
+                    </div>
                 </CardContent>
             </Card>
 
             {/* Adjustment Modal */}
             {adjustingProduct && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <Card className="w-full max-w-md">
-                        <CardHeader>
-                            <CardTitle className="font-serif text-2xl">Adjust Stock</CardTitle>
-                            <p className="text-sm text-[#6B6B6B]">{adjustingProduct.name}</p>
-                            <p className="text-sm">Current: {adjustingProduct.stock_quantity || 0} units</p>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <Label>Quantity Change</Label>
-                                <Input
-                                    type="number"
-                                    value={adjustment.quantity}
-                                    onChange={(e) =>
-                                        setAdjustment({ ...adjustment, quantity: parseInt(e.target.value) || 0 })
-                                    }
-                                    placeholder="Enter positive or negative number"
-                                />
-                                <p className="text-xs text-[#6B6B6B] mt-1">
-                                    New stock: {(adjustingProduct.stock_quantity || 0) + adjustment.quantity}
-                                </p>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+                    <Card className="w-full max-w-lg border-none shadow-2xl overflow-hidden">
+                        <div className="bg-[#1A1A1A] p-8 text-white">
+                            <Badge className="bg-[#2D5F3F] mb-4">Official Adjustment Entry</Badge>
+                            <CardTitle className="font-serif text-3xl font-bold">Adjust Registry</CardTitle>
+                            <CardDescription className="text-gray-400 mt-2 text-lg">
+                                Current Integrity: {adjustingProduct.stock_quantity || 0} units for <span className="text-white font-bold">{adjustingProduct.name}</span>
+                            </CardDescription>
+                        </div>
+                        <CardContent className="space-y-6 p-8 bg-white">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] uppercase tracking-widest font-bold text-[#6B6B6B]">Delta Quantity</Label>
+                                    <div className="relative">
+                                        <Input
+                                            type="number"
+                                            value={adjustment.quantity}
+                                            onChange={(e) =>
+                                                setAdjustment({ ...adjustment, quantity: parseInt(e.target.value) || 0 })
+                                            }
+                                            className="h-14 text-xl font-bold pl-12 border-[#E8E8E8] focus:border-[#2D5F3F] transition-all"
+                                            placeholder="0"
+                                        />
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                                            {adjustment.quantity >= 0 ? <ArrowUpRight className="h-6 w-6 text-green-500" /> : <ArrowDownRight className="h-6 w-6 text-red-500" />}
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-[#6B6B6B] font-medium italic">
+                                        Projected Balance: <span className="text-[#1A1A1A] font-bold">{(adjustingProduct.stock_quantity || 0) + adjustment.quantity} units</span>
+                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] uppercase tracking-widest font-bold text-[#6B6B6B]">Reason Code</Label>
+                                    <Input
+                                        value={adjustment.reason}
+                                        onChange={(e) => setAdjustment({ ...adjustment, reason: e.target.value })}
+                                        placeholder="Restocked, Damaged, Return"
+                                        className="h-14 border-[#E8E8E8] focus:border-[#2D5F3F] transition-all"
+                                    />
+                                </div>
                             </div>
 
-                            <div>
-                                <Label>Reason</Label>
-                                <Input
-                                    value={adjustment.reason}
-                                    onChange={(e) => setAdjustment({ ...adjustment, reason: e.target.value })}
-                                    placeholder="e.g., Restocked, Damaged"
-                                />
-                            </div>
-
-                            <div className="flex gap-2">
+                            <div className="flex gap-4 pt-4">
                                 <Button
                                     variant="outline"
                                     onClick={() => {
                                         setAdjustingProduct(null);
                                         setAdjustment({ quantity: 0, reason: "" });
                                     }}
-                                    className="flex-1"
+                                    className="flex-1 h-14 border-[#E8E8E8] text-[#1A1A1A] hover:bg-[#FDFCF9] font-bold"
                                 >
-                                    Cancel
+                                    Cancel Action
                                 </Button>
                                 <Button
                                     onClick={handleAdjustStock}
                                     disabled={adjustment.quantity === 0}
-                                    className="flex-1"
+                                    className="flex-1 h-14 bg-[#1A1A1A] hover:bg-[#333333] text-white font-bold shadow-lg shadow-black/10"
                                 >
-                                    Confirm
+                                    Confirm Adjustment
                                 </Button>
                             </div>
                         </CardContent>
@@ -170,3 +226,4 @@ export default function SubAdminStockPage() {
         </div>
     );
 }
+

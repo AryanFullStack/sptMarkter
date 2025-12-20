@@ -301,11 +301,15 @@ export async function recordPayment(paymentData: {
   // Update order paid_amount and pending_amount
   const { data: order, error: orderFetchError } = await supabase
     .from("orders")
-    .select("paid_amount, total_amount")
+    .select("paid_amount, total_amount, pending_amount")
     .eq("id", paymentData.order_id)
     .single();
 
   if (orderFetchError) throw orderFetchError;
+
+  if (paymentData.amount > Number(order.pending_amount)) {
+    throw new Error(`Payment amount (Rs. ${paymentData.amount}) exceeds outstanding balance (Rs. ${order.pending_amount})`);
+  }
 
   const newPaidAmount = (order.paid_amount || 0) + paymentData.amount;
   const newPendingAmount = order.total_amount - newPaidAmount;
@@ -315,6 +319,7 @@ export async function recordPayment(paymentData: {
     .update({
       paid_amount: newPaidAmount,
       pending_amount: newPendingAmount,
+      payment_status: newPendingAmount <= 0 ? 'paid' : 'partial'
     })
     .eq("id", paymentData.order_id);
 
@@ -441,7 +446,19 @@ export async function loadAdminDashboardDataAction() {
 
   // Parallel fetch for potential speed
   const [ordersRes, productsRes, usersRes] = await Promise.all([
-     supabase.from("orders").select("id, total_amount, paid_amount, status, created_at, order_number, users:users!user_id(full_name)").order("created_at", { ascending: false }),
+     supabase.from("orders")
+     .select(`
+        id, 
+        total_amount, 
+        paid_amount, 
+        pending_amount,
+        status, 
+        created_at, 
+        order_number, 
+        users:users!user_id(full_name),
+        recorded_by_user:recorded_by(full_name)
+     `)
+     .order("created_at", { ascending: false }),
      supabase.from("products").select("id, name, stock_quantity, images").lte("stock_quantity", 10).limit(5),
      supabase
         .from("users")
@@ -467,7 +484,11 @@ export async function loadAdminDashboardDataAction() {
 
   // Calculate Stats
   const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
-  const pendingCredits = orders.reduce((sum, o) => sum + ((Number(o.total_amount) || 0) - (Number(o.paid_amount) || 0)), 0);
+  const pendingCredits = orders.reduce((sum, o) => {
+      const total = Number(o.total_amount) || 0;
+      const paid = Number(o.paid_amount) || 0;
+      return sum + (total - paid);
+  }, 0);
   
   const stats = {
       totalRevenue,
@@ -475,7 +496,7 @@ export async function loadAdminDashboardDataAction() {
       pendingCredits,
       lowStockItems: lowStockProducts.length,
       activeCustomers: users.filter((u: any) => u.approved).length,
-      pendingApprovals: users.filter((u: any) => !u.approved && ["retailer", "beauty_parlor"].includes(u.role)).length
+      pendingApprovals: users.filter((u: any) => !u.approved && ["retailer", "beauty_parlor", "salesman", "sub_admin"].includes(u.role)).length
   };
 
   // Recent 5
@@ -501,10 +522,35 @@ export async function loadAdminDashboardDataAction() {
      recentOrders,
      lowStockProducts,
      salesData,
-     pendingUsers: users.filter((u: any) => !u.approved && ["retailer", "beauty_parlor"].includes(u.role)),
+     pendingUsers: users.filter((u: any) => !u.approved && ["retailer", "beauty_parlor", "salesman", "sub_admin"].includes(u.role)),
      allUsers: users,
-     pendingPaymentOrders: orders.filter(o => (Number(o.total_amount) || 0) - (Number(o.paid_amount) || 0) > 0)
+     pendingPaymentOrders: orders.filter(o => {
+         const total = Number(o.total_amount) || 0;
+         const paid = Number(o.paid_amount) || 0;
+         return (total - paid) > 0;
+     })
   };
+}
+
+export async function getPendingUsersAction() {
+    await checkPermissions(['admin', 'sub_admin']);
+
+    const supabase = createAdminClient();
+    if (!supabase) throw new Error("Admin client unavailable");
+
+    const { data: users, error } = await supabase
+        .from("users")
+        .select(`
+            id, role, approved, created_at, full_name, email, phone,
+            addresses:addresses(city, address_type, is_default)
+        `)
+        .is("approved", null)
+        .neq("role", "admin")
+        .order("created_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    return users;
 }
 
 export async function updateOrderStatusAction(orderId: string, status: string) {
@@ -987,4 +1033,122 @@ export async function createSalesman(userData: {
 
   revalidatePath("/admin/users");
   return { success: true, userId };
+}
+
+export async function getConsolidatedPendingPaymentsAction() {
+  await checkPermissions(['admin', 'sub_admin']);
+
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  // Fetch orders with pending balance
+  const { data: orders, error } = await supabase
+    .from("orders")
+    .select(`
+      id,
+      order_number,
+      total_amount,
+      paid_amount,
+      pending_amount,
+      status,
+      created_at,
+      payment_status,
+      user:user_id (
+        id,
+        full_name,
+        role,
+        email
+      ),
+      recorded_by_user:recorded_by (
+        id,
+        full_name,
+        role
+      )
+    `)
+    .gt("pending_amount", 0)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return orders;
+}
+
+export async function getSalesmenPerformanceAction() {
+  await checkPermissions(['admin', 'sub_admin']);
+
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  // 1. Fetch all salesmen
+  const { data: salesmen, error: sErr } = await supabase
+    .from("users")
+    .select("id, full_name, email, phone, created_at")
+    .eq("role", "salesman")
+    .order("full_name");
+
+  if (sErr) throw new Error(sErr.message);
+
+  // 2. Fetch all orders recorded by salesmen to aggregate data
+  // We'll process this in-memory for precise counts
+  const { data: orders, error: oErr } = await supabase
+    .from("orders")
+    .select(`
+      id,
+      total_amount,
+      paid_amount,
+      pending_amount,
+      created_at,
+      recorded_by,
+      user_id,
+      users:user_id (full_name)
+    `)
+    .not("recorded_by", "is", null);
+
+  if (oErr) throw new Error(oErr.message);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const performanceData = salesmen.map(salesman => {
+    const salesmanOrders = orders.filter(o => o.recorded_by === salesman.id);
+    
+    // Unique Shops (Order-based)
+    const shopsMap = new Map();
+    salesmanOrders.forEach(o => {
+      if (!shopsMap.has(o.user_id)) {
+        const userObj = Array.isArray(o.users) ? o.users[0] : o.users;
+        shopsMap.set(o.user_id, {
+          id: o.user_id,
+          name: (userObj as any)?.full_name || "Unknown Shop",
+          orderCount: 0,
+          totalSales: 0,
+          totalPending: 0
+        });
+      }
+      const shop = shopsMap.get(o.user_id);
+      shop.orderCount++;
+      shop.totalSales += Number(o.total_amount) || 0;
+      shop.totalPending += Number(o.pending_amount) || 0;
+    });
+
+    const totalSales = salesmanOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+    const totalCollected = salesmanOrders.reduce((sum, o) => sum + (Number(o.paid_amount) || 0), 0);
+    const totalPending = salesmanOrders.reduce((sum, o) => sum + (Number(o.pending_amount) || 0), 0);
+    const todayOrders = salesmanOrders.filter(o => new Date(o.created_at) >= today).length;
+
+    return {
+      ...salesman,
+      stats: {
+        totalSales,
+        totalCollected,
+        totalPending,
+        todayOrders,
+        orderCount: salesmanOrders.length,
+        shopCount: shopsMap.size
+      },
+      shops: Array.from(shopsMap.values()).sort((a, b) => b.totalSales - a.totalSales)
+    };
+  });
+
+  return performanceData;
 }

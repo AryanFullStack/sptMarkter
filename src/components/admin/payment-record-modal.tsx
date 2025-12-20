@@ -105,7 +105,7 @@ export function PaymentRecordModal({ order, onClose, onSuccess }: PaymentRecordM
 
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div>
-                        <Label htmlFor="amount">Payment Amount (₹) *</Label>
+                        <Label htmlFor="amount">Payment Amount (Rs.) *</Label>
                         <Input
                             id="amount"
                             type="number"

@@ -75,7 +75,7 @@ export function UserApprovalModal({ user, onClose, onSubmit }: UserApprovalModal
 
                     {(user.role === "retailer" || user.role === "beauty_parlor") && (
                         <div>
-                            <Label htmlFor="creditLimit">Credit Limit (₹)</Label>
+                            <Label htmlFor="creditLimit">Credit Limit (Rs.)</Label>
                             <Input
                                 id="creditLimit"
                                 type="number"

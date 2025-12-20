@@ -35,8 +35,8 @@ export default function CheckoutPage() {
   const [savingAddress, setSavingAddress] = useState(false);
 
   const subtotal = getCartTotal();
-  const tax = subtotal * 0.05;
-  const shipping = subtotal > 5000 ? 0 : 200;
+  const tax = 0;
+  const shipping = 0;
   const total = subtotal + tax + shipping;
 
   // Check if user can make partial payment

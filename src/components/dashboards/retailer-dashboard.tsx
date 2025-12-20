@@ -153,7 +153,7 @@ export default function RetailerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  ₹{Number(stats?.totalPaid || 0).toLocaleString()}
+                  Rs. {Number(stats?.totalPaid || 0).toLocaleString()}
                 </div>
                 <p className="text-xs text-[#6B6B6B] mt-1">Total payments made</p>
               </CardContent>
@@ -166,7 +166,7 @@ export default function RetailerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-[#1A1A1A]">
-                  ₹{Number(stats?.totalSpent || 0).toLocaleString()}
+                  Rs. {Number(stats?.totalSpent || 0).toLocaleString()}
                 </div>
                 <p className="text-xs text-[#6B6B6B] mt-1">Lifetime value</p>
               </CardContent>
@@ -196,7 +196,7 @@ export default function RetailerDashboard() {
                           <p className="text-xs text-[#6B6B6B]">{b.count} items purchased</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-[#1A1A1A]">₹{b.total.toLocaleString()}</p>
+                          <p className="font-bold text-[#1A1A1A]">Rs. {b.total.toLocaleString()}</p>
                         </div>
                       </div>
                     ))}
@@ -239,7 +239,7 @@ export default function RetailerDashboard() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold">₹{Number(order.total_amount).toLocaleString()}</p>
+                          <p className="font-semibold">Rs. {Number(order.total_amount).toLocaleString()}</p>
                           <Badge
                             variant={order.payment_status === "paid" ? "default" : "secondary"}
                             className="text-xs"

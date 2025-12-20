@@ -146,7 +146,7 @@ export async function validateCheckoutPendingLimit(
   if (totalPendingAfterOrder > limit) {
     return {
       valid: false,
-      error: `Pending amount limit exceeded. Current pending: ₹${limitInfo.currentPending.toLocaleString()}, New order pending: ₹${newPending.toLocaleString()}, Limit: ₹${limit.toLocaleString()}. Please pay the full amount or reduce pending orders.`,
+      error: `Pending amount limit exceeded. Current pending: Rs. ${limitInfo.currentPending.toLocaleString()}, New order pending: Rs. ${newPending.toLocaleString()}, Limit: Rs. ${limit.toLocaleString()}. Please pay the full amount or reduce pending orders.`,
       currentPending: limitInfo.currentPending,
       newPending,
       limit,

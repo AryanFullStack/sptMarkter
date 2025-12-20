@@ -81,7 +81,7 @@ export function ClientProfileDialog({
             await updatePendingLimit(userId, limitValue);
             toast({
                 title: "Limit Updated",
-                description: `Pending limit updated to ₹${limitValue.toLocaleString()}`,
+                description: `Pending limit updated to Rs. ${limitValue.toLocaleString()}`,
             });
             setEditingLimit(false);
             loadProfile(); // Reload to show updated data

@@ -43,7 +43,7 @@ export function PendingSummaryCard({
                             <p className="text-sm text-[#6B6B6B] font-medium">Total Pending</p>
                         </div>
                         <p className="text-2xl md:text-3xl font-bold text-[#C77D2E]">
-                            ₹{currentPending.toLocaleString()}
+                            Rs. {currentPending.toLocaleString()}
                         </p>
                     </div>
 
@@ -53,7 +53,7 @@ export function PendingSummaryCard({
                             <p className="text-sm text-[#6B6B6B] font-medium">Allowed Limit</p>
                         </div>
                         <p className="text-2xl md:text-3xl font-bold text-[#1A1A1A]">
-                            ₹{allowedLimit.toLocaleString()}
+                            Rs. {allowedLimit.toLocaleString()}
                         </p>
                     </div>
 
@@ -63,7 +63,7 @@ export function PendingSummaryCard({
                             <p className="text-sm text-[#6B6B6B] font-medium">Remaining Allowed</p>
                         </div>
                         <p className="text-2xl md:text-3xl font-bold text-[#2D5F3F]">
-                            ₹{remainingAllowed.toLocaleString()}
+                            Rs. {remainingAllowed.toLocaleString()}
                         </p>
                     </div>
                 </div>
@@ -74,8 +74,8 @@ export function PendingSummaryCard({
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-[#6B6B6B] font-medium">Limit Usage</span>
                             <span className={`font-semibold ${isOverLimit ? 'text-red-600' :
-                                    isNearLimit ? 'text-[#C77D2E]' :
-                                        'text-[#2D5F3F]'
+                                isNearLimit ? 'text-[#C77D2E]' :
+                                    'text-[#2D5F3F]'
                                 }`}>
                                 {usagePercentage.toFixed(1)}%
                             </span>
@@ -83,8 +83,8 @@ export function PendingSummaryCard({
                         <Progress
                             value={Math.min(usagePercentage, 100)}
                             className={`h-3 ${isOverLimit ? '[&>div]:bg-red-500' :
-                                    isNearLimit ? '[&>div]:bg-[#C77D2E]' :
-                                        '[&>div]:bg-[#2D5F3F]'
+                                isNearLimit ? '[&>div]:bg-[#C77D2E]' :
+                                    '[&>div]:bg-[#2D5F3F]'
                                 }`}
                         />
                     </div>
@@ -131,7 +131,7 @@ export function PendingSummaryCard({
                 {allowedLimit === 0 && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                         <p className="text-sm text-blue-700">
-                            Your pending amount limit is ₹0. All orders must be paid in full at checkout.
+                            Your pending amount limit is Rs. 0. All orders must be paid in full at checkout.
                         </p>
                     </div>
                 )}

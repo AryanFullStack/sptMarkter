@@ -101,15 +101,15 @@ export function UserCreditDialog({ userId, userName, isOpen, onClose }: UserCred
                         <div className="grid grid-cols-3 gap-4">
                             <div className="bg-[#F7F5F2] p-4 rounded-lg text-center">
                                 <div className="text-sm text-[#6B6B6B]">Available Balance</div>
-                                <div className="text-2xl font-bold text-[#1A1A1A]">₹{Number(balance.balance).toLocaleString()}</div>
+                                <div className="text-2xl font-bold text-[#1A1A1A]">Rs. {Number(balance.balance).toLocaleString()}</div>
                             </div>
                             <div className="bg-[#F7F5F2] p-4 rounded-lg text-center">
                                 <div className="text-sm text-[#6B6B6B]">Used Credit</div>
-                                <div className="text-xl font-semibold text-[#6B6B6B]">₹{Number(balance.used_credit).toLocaleString()}</div>
+                                <div className="text-xl font-semibold text-[#6B6B6B]">Rs. {Number(balance.used_credit).toLocaleString()}</div>
                             </div>
                             <div className="bg-[#F7F5F2] p-4 rounded-lg text-center">
                                 <div className="text-sm text-[#6B6B6B]">Pending</div>
-                                <div className="text-xl font-semibold text-[#C77D2E]">₹{Number(balance.pending_credit).toLocaleString()}</div>
+                                <div className="text-xl font-semibold text-[#C77D2E]">Rs. {Number(balance.pending_credit).toLocaleString()}</div>
                             </div>
                         </div>
 
@@ -130,7 +130,7 @@ export function UserCreditDialog({ userId, userName, isOpen, onClose }: UserCred
                                     </Select>
                                 </div>
                                 <div className="space-y-1">
-                                    <Label>Amount (₹)</Label>
+                                    <Label>Amount (Rs.)</Label>
                                     <Input
                                         type="number"
                                         step="0.01"
@@ -178,13 +178,13 @@ export function UserCreditDialog({ userId, userName, isOpen, onClose }: UserCred
                                                         <td className="p-3">{new Date(tx.created_at).toLocaleDateString()}</td>
                                                         <td className="p-3 capitalize">
                                                             <span className={`px-2 py-0.5 rounded text-xs ${tx.type === 'add' ? 'bg-green-100 text-green-800' :
-                                                                    tx.type === 'deduct' ? 'bg-red-100 text-red-800' :
-                                                                        'bg-gray-100 text-gray-800'
+                                                                tx.type === 'deduct' ? 'bg-red-100 text-red-800' :
+                                                                    'bg-gray-100 text-gray-800'
                                                                 }`}>
                                                                 {tx.type}
                                                             </span>
                                                         </td>
-                                                        <td className="p-3 font-semibold">₹{Number(tx.amount).toLocaleString()}</td>
+                                                        <td className="p-3 font-semibold">Rs. {Number(tx.amount).toLocaleString()}</td>
                                                         <td className="p-3 text-[#6B6B6B]">{tx.description || '-'}</td>
                                                         <td className="p-3 text-xs">{tx.performer?.email || 'System'}</td>
                                                     </tr>

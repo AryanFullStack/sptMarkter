@@ -270,11 +270,11 @@ export default function ShopDetailPage() {
                     <CardContent>
                         <div className="flex justify-between items-end mb-2">
                             <div>
-                                <p className="text-2xl font-bold">₹{financialSummary.remainingLimit.toLocaleString()}</p>
+                                <p className="text-2xl font-bold">Rs. {financialSummary.remainingLimit.toLocaleString()}</p>
                                 <p className="text-xs text-muted-foreground">Available Credit Limit</p>
                             </div>
                             <div className="text-right">
-                                <p className="font-medium text-muted-foreground">Total Limit: ₹{financialSummary.pendingLimit.toLocaleString()}</p>
+                                <p className="font-medium text-muted-foreground">Total Limit: Rs. {financialSummary.pendingLimit.toLocaleString()}</p>
                             </div>
                         </div>
                         <Progress
@@ -282,7 +282,7 @@ export default function ShopDetailPage() {
                             className={`h-2 ${isBlocked ? "bg-red-100" : "bg-gray-100"}`}
                         />
                         <p className="text-xs text-right mt-1 text-muted-foreground">
-                            {((financialSummary.currentPending / (financialSummary.pendingLimit || 1)) * 100).toFixed(0)}% Used (₹{financialSummary.currentPending.toLocaleString()} pending)
+                            {((financialSummary.currentPending / (financialSummary.pendingLimit || 1)) * 100).toFixed(0)}% Used (Rs. {financialSummary.currentPending.toLocaleString()} pending)
                         </p>
                     </CardContent>
                 </Card>
@@ -300,7 +300,7 @@ export default function ShopDetailPage() {
                                 <DollarSign className="h-5 w-5" />
                                 <span className="font-medium">My Total Pending</span>
                             </div>
-                            <p className="text-4xl font-bold">₹{(totalInternalPending || 0).toLocaleString()}</p>
+                            <p className="text-4xl font-bold">Rs. {(totalInternalPending || 0).toLocaleString()}</p>
                             <p className="text-sm mt-2 opacity-80">
                                 Outstanding balance for orders recorded by you.
                             </p>
@@ -336,7 +336,7 @@ export default function ShopDetailPage() {
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-bold text-[#C77D2E]">₹{Number(ledger.pending_amount).toLocaleString()}</p>
+                                                <p className="font-bold text-[#C77D2E]">Rs. {Number(ledger.pending_amount).toLocaleString()}</p>
                                                 <p className="text-xs text-muted-foreground">Pending</p>
                                             </div>
                                         </div>
@@ -362,12 +362,12 @@ export default function ShopDetailPage() {
                                             <Badge variant="outline">{new Date(order.created_at).toLocaleDateString()}</Badge>
                                         </div>
                                         <div className="text-sm text-muted-foreground mt-1">
-                                            Total: ₹{order.total_amount} | Paid: ₹{order.paid_amount}
+                                            Total: Rs. {order.total_amount} | Paid: Rs. {order.paid_amount}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-4 justify-between sm:justify-end">
                                         <div className="text-right">
-                                            <p className="font-bold text-red-600">₹{order.pending_amount}</p>
+                                            <p className="font-bold text-red-600">Rs. {order.pending_amount}</p>
                                             <p className="text-xs text-muted-foreground">Pending</p>
                                         </div>
                                         <Button
@@ -387,7 +387,7 @@ export default function ShopDetailPage() {
                                         <div className="space-y-1">
                                             {payments.filter(p => p.order_id === order.id).map((p: any) => (
                                                 <div key={p.id} className="flex justify-between items-center text-gray-600">
-                                                    <span>Collected ₹{Number(p.amount).toLocaleString()} on {new Date(p.created_at).toLocaleDateString()}</span>
+                                                    <span>Collected Rs. {Number(p.amount).toLocaleString()} on {new Date(p.created_at).toLocaleDateString()}</span>
                                                     <span className="italic text-[10px]">{p.notes || 'No notes'}</span>
                                                 </div>
                                             ))}
@@ -436,12 +436,12 @@ export default function ShopDetailPage() {
                     <DialogHeader>
                         <DialogTitle>Collect Payment</DialogTitle>
                         <DialogDescription>
-                            Record a payment for order. Max collectable: ₹{maxPayment}
+                            Record a payment for order. Max collectable: Rs. {maxPayment}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <Label htmlFor="amount">Amount (₹)</Label>
+                            <Label htmlFor="amount">Amount (Rs.)</Label>
                             <Input
                                 id="amount"
                                 type="number"

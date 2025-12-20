@@ -68,9 +68,9 @@ export function LedgerReports() {
                                     <TableRow key={report.shop_id}>
                                         <TableCell className="font-medium">{report.shop_name}</TableCell>
                                         <TableCell className="text-muted-foreground text-sm">{report.shop_phone || 'N/A'}</TableCell>
-                                        <TableCell className="text-right">₹{limit.toLocaleString()}</TableCell>
-                                        <TableCell className="text-right font-bold text-[#C77D2E]">₹{used.toLocaleString()}</TableCell>
-                                        <TableCell className="text-right text-green-600">₹{remaining.toLocaleString()}</TableCell>
+                                        <TableCell className="text-right">Rs. {limit.toLocaleString()}</TableCell>
+                                        <TableCell className="text-right font-bold text-[#C77D2E]">Rs. {used.toLocaleString()}</TableCell>
+                                        <TableCell className="text-right text-green-600">Rs. {remaining.toLocaleString()}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 {remaining <= 0 && limit > 0 ? (

@@ -231,7 +231,7 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
 
                     {/* Pricing */}
                     <div className="space-y-4">
-                        <h3 className="font-semibold text-lg">Pricing (₹)</h3>
+                        <h3 className="font-semibold text-lg">Pricing (Rs.)</h3>
 
                         <div className="grid md:grid-cols-3 gap-4">
                             <div>

@@ -1,5 +1,392 @@
-import SalesmanDashboard from "@/components/dashboards/salesman-dashboard";
+"use client";
 
-export default function SalesmanPage() {
-    return <SalesmanDashboard />;
+import { useState, useEffect } from "react";
+import { createClient } from "@/supabase/client";
+import { DollarSign, ShoppingBag, Clock, Users, ArrowUpRight, TrendingUp, Search, ShoppingCart } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { getSalesmanDashboardData, getOrderDetails } from "@/app/actions/salesman-actions";
+import { useToast } from "@/hooks/use-toast";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+
+export default function SalesmanOverview() {
+    const [data, setData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [selectedOrder, setSelectedOrder] = useState<any>(null);
+    const [orderModalOpen, setOrderModalOpen] = useState(false);
+
+    const supabase = createClient();
+    const { toast } = useToast();
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    async function loadData() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const dashboardData = await getSalesmanDashboardData(user.id);
+                setData(dashboardData);
+            }
+        } catch (e) {
+            toast({ title: "Error", description: "Failed to load dashboard data", variant: "destructive" });
+        }
+        setLoading(false);
+    }
+
+    async function handleViewDetails(orderId: string) {
+        try {
+            const res = await getOrderDetails(orderId);
+            if (res.order) {
+                setSelectedOrder(res.order);
+                setOrderModalOpen(true);
+            }
+        } catch (e) {
+            toast({ title: "Error", description: "Failed to load order details" });
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="space-y-8 animate-pulse">
+                <div className="h-10 bg-gray-200 rounded w-1/4" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-gray-200 rounded-xl" />)}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 h-96 bg-gray-200 rounded-xl" />
+                    <div className="h-96 bg-gray-200 rounded-xl" />
+                </div>
+            </div>
+        );
+    }
+
+    if (!data) return null;
+
+    const { stats, brandPending, recentOrders, shopLedgers } = data;
+
+    return (
+        <div className="space-y-8 pb-10">
+            {/* Page Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="font-serif text-3xl font-bold text-[#1A1A1A]">Dashboard Overview</h1>
+                    <p className="text-[#6B6B6B]">Welcome back! Here's your performance summary.</p>
+                </div>
+                <Link href="/salesman/shops">
+                    <Button className="bg-[#D4AF37] hover:bg-[#C19B2E] text-white shadow-lg shadow-[#D4AF37]/20 px-6 h-11 transition-all hover:scale-105">
+                        Create New Order
+                    </Button>
+                </Link>
+            </div>
+
+            {/* Key Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card className="border-none shadow-sm bg-white overflow-hidden group">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-sm font-medium text-[#6B6B6B]">Orders Today</CardTitle>
+                        <div className="w-8 h-8 rounded-lg bg-[#F7F5F2] flex items-center justify-center group-hover:bg-[#D4AF37]/10 transition-colors">
+                            <ShoppingBag className="h-4 w-4 text-[#D4AF37]" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-[#1A1A1A]">{stats?.ordersToday || 0}</div>
+                        <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                            <TrendingUp className="h-3 w-3" /> Freshly recorded
+                        </p>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-sm bg-white overflow-hidden group">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Collected</CardTitle>
+                        <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center group-hover:bg-green-100 transition-colors">
+                            <DollarSign className="h-4 w-4 text-green-600" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-[#1A1A1A]">Rs. {Number(stats?.totalCollection || 0).toLocaleString()}</div>
+                        <p className="text-xs text-[#6B6B6B] mt-1">Cash in hand tracking</p>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-sm bg-white overflow-hidden group border-l-4 border-l-red-500/20">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-sm font-medium text-[#6B6B6B]">Total Pending</CardTitle>
+                        <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center group-hover:bg-red-100 transition-colors">
+                            <Clock className="h-4 w-4 text-red-600" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-red-600">Rs. {Number(stats?.totalPending || 0).toLocaleString()}</div>
+                        <p className="text-xs text-[#6B6B6B] mt-1">Outstanding collection</p>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-sm bg-white overflow-hidden group">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-sm font-medium text-[#6B6B6B]">Clients Served</CardTitle>
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                            <Users className="h-4 w-4 text-blue-600" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-[#1A1A1A]">{stats?.clientsServed || 0}</div>
+                        <p className="text-xs text-[#6B6B6B] mt-1">Unique retail points</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column - Shop Ledgers & Recent Orders */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Shop Ledgers Summary */}
+                    <Card className="border-none shadow-sm bg-white">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="font-serif text-xl">Top Pending Shops</CardTitle>
+                                <CardDescription>Shops with the highest outstanding balance</CardDescription>
+                            </div>
+                            <Link href="/salesman/ledgers">
+                                <Button variant="ghost" size="sm" className="text-[#D4AF37] hover:text-[#C19B2E] gap-1">
+                                    All Ledgers <ArrowUpRight className="h-4 w-4" />
+                                </Button>
+                            </Link>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="hover:bg-transparent">
+                                            <TableHead>Shop</TableHead>
+                                            <TableHead className="text-right">Pending Amount</TableHead>
+                                            <TableHead className="text-right sr-only">Action</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {shopLedgers?.slice(0, 5).map((sl: any) => (
+                                            <TableRow key={sl.id} className="group transition-colors hover:bg-[#F7F5F2]/50">
+                                                <TableCell className="font-medium py-4">{sl.name}</TableCell>
+                                                <TableCell className="text-right text-red-600 font-bold">Rs. {Number(sl.pending).toLocaleString()}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Link href={`/salesman/shop/${sl.id}`}>
+                                                        <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 text-[#D4AF37] transition-all">View</Button>
+                                                    </Link>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {(!shopLedgers || shopLedgers.length === 0) && (
+                                            <TableRow>
+                                                <TableCell colSpan={3} className="text-center py-8 text-[#6B6B6B]">No pending shops found.</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Recent Orders */}
+                    <Card className="border-none shadow-sm bg-white">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="font-serif text-xl">Recent Orders</CardTitle>
+                                <CardDescription>Your latest transactions</CardDescription>
+                            </div>
+                            <Link href="/salesman/history">
+                                <Button variant="ghost" size="sm" className="text-[#D4AF37] hover:text-[#C19B2E] gap-1">
+                                    View History <ArrowUpRight className="h-4 w-4" />
+                                </Button>
+                            </Link>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                {recentOrders?.slice(0, 5).map((order: any) => (
+                                    <div
+                                        key={order.id}
+                                        onClick={() => handleViewDetails(order.id)}
+                                        className="flex items-center justify-between p-4 border border-[#E8E8E8] rounded-xl hover:shadow-md transition-all cursor-pointer bg-white group"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-full bg-[#F7F5F2] flex items-center justify-center text-[#D4AF37] group-hover:bg-[#D4AF37] group-hover:text-white transition-colors">
+                                                <ShoppingCart className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-[#1A1A1A] group-hover:text-[#D4AF37] transition-colors">#{order.order_number || order.id.slice(0, 8)}</p>
+                                                <p className="text-sm text-[#6B6B6B]">{order.user?.full_name}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold text-[#1A1A1A]">Rs. {Number(order.total_amount).toLocaleString()}</p>
+                                            <Badge variant={order.payment_status === 'paid' ? 'default' : 'destructive'} className="text-[10px] h-5">
+                                                {order.payment_status?.toUpperCase()}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!recentOrders || recentOrders.length === 0) && (
+                                    <div className="text-center py-8 text-[#6B6B6B]">No recent orders found.</div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Right Column - Brand Pending & Quick Actions */}
+                <div className="space-y-6">
+                    {/* Brand Pending Breakdown */}
+                    <Card className="border-none shadow-sm bg-white">
+                        <CardHeader>
+                            <CardTitle className="font-serif text-xl">Pending by Brand</CardTitle>
+                            <CardDescription>Breakdown by authorized brands</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                {brandPending?.map((bp: any) => (
+                                    <div key={bp.id} className="p-4 rounded-xl border border-[#F7F5F2] bg-[#FDFCF9] space-y-2">
+                                        <div className="flex justify-between items-center text-xs text-[#6B6B6B] font-bold uppercase tracking-wider">
+                                            <span>{bp.name}</span>
+                                            <span>{Math.round((bp.amount / (stats.totalPending || 1)) * 100)}%</span>
+                                        </div>
+                                        <div className="flex justify-between items-end">
+                                            <p className="text-xl font-bold text-[#1A1A1A]">Rs. {Number(bp.amount).toLocaleString()}</p>
+                                        </div>
+                                        <div className="w-full bg-gray-200 h-1 rounded-full overflow-hidden">
+                                            <div
+                                                className="bg-[#D4AF37] h-full transition-all duration-1000"
+                                                style={{ width: `${Math.min(100, (bp.amount / (stats.totalPending || 1)) * 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!brandPending || brandPending.length === 0) && (
+                                    <p className="text-sm text-[#6B6B6B] py-4 text-center italic">No pending brand data.</p>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Quick Search Card */}
+                    <Card className="border-none shadow-sm bg-[#1A1A1A] text-white overflow-hidden relative">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4AF37]/20 rounded-full blur-3xl -mr-16 -mt-16" />
+                        <CardHeader>
+                            <CardTitle className="font-serif text-xl text-white">Find a Client</CardTitle>
+                            <CardDescription className="text-gray-400">Quickly locate a shop and start an order</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4 relative z-10">
+                            <Link href="/salesman/shops">
+                                <Button className="w-full bg-[#D4AF37] hover:bg-[#C19B2E] text-white border-none h-12 gap-2">
+                                    <Search className="h-4 w-4" /> Start Searching
+                                </Button>
+                            </Link>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            {/* Order Details Modal (Reuse logic from history) */}
+            <Dialog open={orderModalOpen} onOpenChange={setOrderModalOpen}>
+                <DialogContent className="max-w-3xl max-h-[90vh]">
+                    <DialogHeader>
+                        <DialogTitle className="font-serif text-2xl">Order Details</DialogTitle>
+                        <DialogDescription>
+                            Order #{selectedOrder?.order_number} • {new Date(selectedOrder?.created_at).toLocaleDateString()}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedOrder && (
+                        <ScrollArea className="pr-4">
+                            <div className="space-y-6">
+                                <section className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                                    <div>
+                                        <p className="text-xs uppercase text-[#6B6B6B] font-semibold">Client Details</p>
+                                        <p className="font-bold">{selectedOrder.user?.full_name}</p>
+                                        <p className="text-sm text-[#6B6B6B]">{selectedOrder.user?.phone || 'No Phone'}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs uppercase text-[#6B6B6B] font-semibold">Status</p>
+                                        <div className="flex justify-end gap-2 mt-1">
+                                            <Badge variant="default">{selectedOrder.status?.toUpperCase()}</Badge>
+                                            <Badge variant={selectedOrder.payment_status === 'paid' ? 'default' : 'destructive'}>
+                                                {selectedOrder.payment_status?.toUpperCase()}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="font-semibold mb-2">Order Items</h3>
+                                    <div className="border rounded-lg overflow-hidden">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Product</TableHead>
+                                                    <TableHead className="text-center">Qty</TableHead>
+                                                    <TableHead className="text-right">Price</TableHead>
+                                                    <TableHead className="text-right">Total</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {selectedOrder.items?.map((item: any, i: number) => (
+                                                    <TableRow key={i}>
+                                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                                        <TableCell className="text-center">{item.quantity}</TableCell>
+                                                        <TableCell className="text-right">Rs. {item.price}</TableCell>
+                                                        <TableCell className="text-right font-bold">Rs. {item.total}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </section>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <section>
+                                        <h3 className="font-semibold mb-2">Financial Summary</h3>
+                                        <div className="space-y-1 text-sm border p-4 rounded-lg bg-gray-50/50">
+                                            <div className="flex justify-between">
+                                                <span>Total Bill:</span>
+                                                <span className="font-bold">Rs. {Number(selectedOrder.total_amount).toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between text-green-600">
+                                                <span>Total Paid:</span>
+                                                <span className="font-bold">Rs. {Number(selectedOrder.paid_amount).toLocaleString()}</span>
+                                            </div>
+                                            <Separator className="my-2" />
+                                            <div className="flex justify-between text-lg text-red-600 font-bold">
+                                                <span>Remaining:</span>
+                                                <span>Rs. {Number(selectedOrder.pending_amount).toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section>
+                                        <h3 className="font-semibold mb-2">Payment History</h3>
+                                        <div className="space-y-2 max-h-40 overflow-y-auto border p-4 rounded-lg bg-gray-50/50">
+                                            {selectedOrder.payments?.map((p: any) => (
+                                                <div key={p.id} className="text-xs flex justify-between border-b pb-1 last:border-0">
+                                                    <span>{new Date(p.created_at).toLocaleDateString()}</span>
+                                                    <span className="font-bold text-green-600">Rs. {p.amount}</span>
+                                                    <span className="text-[#6B6B6B] italic">{p.payment_method}</span>
+                                                </div>
+                                            ))}
+                                            {(!selectedOrder.payments || selectedOrder.payments.length === 0) && (
+                                                <p className="text-xs text-center py-4 text-[#6B6B6B]">No payment records found.</p>
+                                            )}
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        </ScrollArea>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
 }

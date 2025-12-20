@@ -49,7 +49,7 @@ export default function CouponsPage() {
             key: "discount_value",
             header: "Discount",
             render: (c) =>
-                c.discount_type === "percentage" ? `${c.discount_value}%` : `₹${c.discount_value}`
+                c.discount_type === "percentage" ? `${c.discount_value}%` : `Rs. ${c.discount_value}`
         },
         {
             key: "usage_count",

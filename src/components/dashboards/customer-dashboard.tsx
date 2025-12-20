@@ -159,7 +159,7 @@ export default function CustomerDashboard() {
                         <p className="text-sm text-[#6B6B6B]">{new Date(order.created_at).toLocaleDateString()}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold text-[#1A1A1A]">₹{order.total_amount.toFixed(2)}</p>
+                        <p className="font-semibold text-[#1A1A1A]">Rs. {order.total_amount.toFixed(2)}</p>
                         <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
                       </div>
                     </div>

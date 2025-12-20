@@ -58,8 +58,8 @@ export function exportToJSON(data: any[], filename: string) {
   document.body.removeChild(link);
 }
 
-export function formatCurrency(amount: number, currency: string = "INR"): string {
-  return new Intl.NumberFormat("en-IN", {
+export function formatCurrency(amount: number, currency: string = "PKR"): string {
+  return new Intl.NumberFormat("en-PK", {
     style: "currency",
     currency: currency,
     minimumFractionDigits: 2,
@@ -70,7 +70,7 @@ export function formatDate(date: string | Date, includeTime: boolean = false): s
   const dateObj = typeof date === "string" ? new Date(date) : date;
   
   if (includeTime) {
-    return dateObj.toLocaleString("en-IN", {
+    return dateObj.toLocaleString("en-PK", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -79,7 +79,7 @@ export function formatDate(date: string | Date, includeTime: boolean = false): s
     });
   }
   
-  return dateObj.toLocaleDateString("en-IN", {
+  return dateObj.toLocaleDateString("en-PK", {
     year: "numeric",
     month: "short",
     day: "numeric",

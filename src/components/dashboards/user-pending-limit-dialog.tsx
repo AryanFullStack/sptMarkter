@@ -94,19 +94,19 @@ export function UserPendingLimitDialog({ userId, userName, isOpen, onClose }: Us
                             <div className="bg-[#F7F5F2] p-4 rounded-lg text-center">
                                 <div className="text-sm text-[#6B6B6B]">Current Pending</div>
                                 <div className="text-2xl font-bold text-[#C77D2E]">
-                                    ₹{Number(pendingInfo?.currentPending || 0).toLocaleString()}
+                                    Rs. {Number(pendingInfo?.currentPending || 0).toLocaleString()}
                                 </div>
                             </div>
                             <div className="bg-[#F7F5F2] p-4 rounded-lg text-center">
                                 <div className="text-sm text-[#6B6B6B]">Allowed Limit</div>
                                 <div className="text-2xl font-bold text-[#1A1A1A]">
-                                    ₹{Number(pendingInfo?.pendingAmountLimit || 0).toLocaleString()}
+                                    Rs. {Number(pendingInfo?.pendingAmountLimit || 0).toLocaleString()}
                                 </div>
                             </div>
                             <div className="bg-[#F7F5F2] p-4 rounded-lg text-center">
                                 <div className="text-sm text-[#6B6B6B]">Remaining</div>
                                 <div className="text-2xl font-bold text-[#2D5F3F]">
-                                    ₹{Number(pendingInfo?.remainingAllowed || 0).toLocaleString()}
+                                    Rs. {Number(pendingInfo?.remainingAllowed || 0).toLocaleString()}
                                 </div>
                             </div>
                         </div>
@@ -120,10 +120,10 @@ export function UserPendingLimitDialog({ userId, userName, isOpen, onClose }: Us
                                 <div className="w-full bg-gray-200 rounded-full h-2">
                                     <div
                                         className={`h-2 rounded-full transition-all ${usagePercentage >= 90
-                                                ? "bg-red-500"
-                                                : usagePercentage >= 70
-                                                    ? "bg-[#C77D2E]"
-                                                    : "bg-[#2D5F3F]"
+                                            ? "bg-red-500"
+                                            : usagePercentage >= 70
+                                                ? "bg-[#C77D2E]"
+                                                : "bg-[#2D5F3F]"
                                             }`}
                                         style={{ width: `${Math.min(usagePercentage, 100)}%` }}
                                     />
@@ -145,7 +145,7 @@ export function UserPendingLimitDialog({ userId, userName, isOpen, onClose }: Us
                             <h3 className="font-semibold text-lg">Update Limit</h3>
                             <form onSubmit={handleSubmit} className="grid gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="newLimit">New Pending Amount Limit (₹)</Label>
+                                    <Label htmlFor="newLimit">New Pending Amount Limit (Rs.)</Label>
                                     <Input
                                         id="newLimit"
                                         type="number"
