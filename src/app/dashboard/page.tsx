@@ -1,11 +1,10 @@
-import { MainNav } from "@/components/main-nav";
-import { MainFooter } from "@/components/main-footer";
 import CustomerDashboard from "@/components/dashboards/customer-dashboard";
 import RetailerDashboard from "@/components/dashboards/retailer-dashboard";
 import ParlorDashboard from "@/components/dashboards/parlor-dashboard";
 import SalesmanDashboard from "@/components/dashboards/salesman-dashboard";
 import { redirect } from "next/navigation";
 import { createClient } from "../../../supabase/server";
+import DashboardLayout from "@/components/dashboards/dashboard-layout";
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -38,17 +37,10 @@ export default async function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFCF9]">
-      <MainNav />
-
-      <main>
-        {role === "beauty_parlor" && <ParlorDashboard />}
-        {role === "retailer" && <RetailerDashboard />}
-        {role === "salesman" && <SalesmanDashboard />}
-        {(role === "customer" || role === "local_customer") && <CustomerDashboard />}
-      </main>
-
-      <MainFooter />
-    </div>
+    <DashboardLayout role={role as any}>
+      {role === "beauty_parlor" && <ParlorDashboard />}
+      {role === "retailer" && <RetailerDashboard />}
+      {(role === "customer" || role === "local_customer") && <CustomerDashboard />}
+    </DashboardLayout>
   );
 }
