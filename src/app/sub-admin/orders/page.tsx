@@ -11,9 +11,10 @@ import { updateOrderStatus } from "@/app/admin/actions";
 import { PaymentRecordModal } from "@/components/admin/payment-record-modal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Eye, Truck, Package, Clock, ShoppingCart, User, CreditCard, ChevronRight, Activity } from "lucide-react";
+import { Eye, Truck, Package, Clock, ShoppingCart, User, CreditCard, ChevronRight, Activity, FileText } from "lucide-react";
 import { loadSubAdminOrdersAction } from "@/app/admin/actions";
 import { cn } from "@/lib/utils";
+import { OrderInvoice } from "@/components/shared/order-invoice";
 
 export default function SubAdminOrdersPage() {
     const [orders, setOrders] = useState<any[]>([]);
@@ -21,6 +22,7 @@ export default function SubAdminOrdersPage() {
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
     const supabase = createClient();
 
     useEffect(() => {
@@ -116,6 +118,17 @@ export default function SubAdminOrdersPage() {
                         }}
                     >
                         <Eye className="h-5 w-5" />
+                    </Button>
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="hover:bg-[#FDFCF9] hover:text-blue-600"
+                        onClick={() => {
+                            setSelectedOrder(o);
+                            setIsInvoiceOpen(true);
+                        }}
+                    >
+                        <FileText className="h-5 w-5" />
                     </Button>
                     <Button
                         size="sm"
@@ -289,6 +302,14 @@ export default function SubAdminOrdersPage() {
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+            <Dialog open={isInvoiceOpen} onOpenChange={setIsInvoiceOpen}>
+                <DialogContent className="max-w-4xl p-0 overflow-hidden bg-transparent border-none">
+                    <OrderInvoice
+                        order={selectedOrder}
+                        onClose={() => setIsInvoiceOpen(false)}
+                    />
                 </DialogContent>
             </Dialog>
         </div>

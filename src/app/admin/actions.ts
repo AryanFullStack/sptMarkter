@@ -223,10 +223,17 @@ export async function deleteProduct(productId: string) {
 
 // Inventory Management Actions
 export async function adjustStock(productId: string, quantityChange: number, reason: string) {
-  const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
+  // Check permissions - only admin and sub_admin can adjust stock
+  await checkPermissions(['admin', 'sub_admin']);
+
+  // Get authenticated user for audit logging
+  const supabaseAuth = await createClient();
+  const { data: { user } } = await supabaseAuth.auth.getUser();
   if (!user) throw new Error("Not authenticated");
+
+  // Use admin client to bypass RLS
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
 
   // Get current stock
   const { data: product, error: fetchError } = await supabase
@@ -235,10 +242,18 @@ export async function adjustStock(productId: string, quantityChange: number, rea
     .eq("id", productId)
     .single();
 
-  if (fetchError) throw fetchError;
+  if (fetchError) {
+    console.error("Error fetching product:", fetchError);
+    throw new Error(`Failed to fetch product: ${fetchError.message}`);
+  }
 
   const previousQuantity = product.stock_quantity || 0;
   const newQuantity = previousQuantity + quantityChange;
+
+  // Prevent negative stock
+  if (newQuantity < 0) {
+    throw new Error(`Invalid stock adjustment: resulting quantity would be negative (${newQuantity})`);
+  }
 
   // Update product stock
   const { error: updateError } = await supabase
@@ -246,7 +261,10 @@ export async function adjustStock(productId: string, quantityChange: number, rea
     .update({ stock_quantity: newQuantity })
     .eq("id", productId);
 
-  if (updateError) throw updateError;
+  if (updateError) {
+    console.error("Error updating product stock:", updateError);
+    throw new Error(`Failed to update stock: ${updateError.message}`);
+  }
 
   // Log inventory change
   const { error: logError } = await supabase
@@ -260,7 +278,10 @@ export async function adjustStock(productId: string, quantityChange: number, rea
       created_by: user.id,
     });
 
-  if (logError) throw logError;
+  if (logError) {
+    console.error("Error logging inventory change:", logError);
+    // Don't throw - the stock was already updated
+  }
 
   await logAudit({
     action: "INVENTORY_ADJUSTED",
@@ -269,7 +290,9 @@ export async function adjustStock(productId: string, quantityChange: number, rea
     changes: { previousQuantity, newQuantity, quantityChange, reason },
   });
 
+  // Revalidate both admin and sub-admin routes
   revalidatePath("/admin/inventory");
+  revalidatePath("/sub-admin/stock");
   return { success: true };
 }
 
@@ -281,49 +304,56 @@ export async function recordPayment(paymentData: {
   notes?: string;
   proof_url?: string;
 }) {
-  const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  // Verify permissions (Admin or Sub-Admin only)
+  const user = await checkPermissions(['admin', 'sub_admin']);
+
+  const supabaseAdmin = createAdminClient();
+  if (!supabaseAdmin) throw new Error("Admin client unavailable");
+
+  // Fetch current order for validation (using admin client to bypass RLS)
+  const { data: order, error: orderFetchError } = await supabaseAdmin
+    .from("orders")
+    .select("paid_amount, total_amount, pending_amount")
+    .eq("id", paymentData.order_id)
+    .single();
+
+  if (orderFetchError) {
+    if (orderFetchError.code === 'PGRST116') {
+      throw new Error(`Order not found with ID: ${paymentData.order_id}`);
+    }
+    throw orderFetchError;
+  }
+
+  if (!order) {
+    throw new Error(`Order not found with ID: ${paymentData.order_id}`);
+  }
+
+  // Validate payment amount doesn't exceed pending amount
+  if (paymentData.amount > Number(order.pending_amount)) {
+    throw new Error(`Payment amount (Rs. ${paymentData.amount}) exceeds outstanding balance (Rs. ${order.pending_amount})`);
+  }
 
   // Insert payment record
-  const { data: payment, error: paymentError } = await supabase
+  // Note: The database trigger 'update_order_payment_status_trigger' will automatically:
+  // 1. Calculate total paid amount from all payments WHERE status = 'completed'
+  // 2. Update order.paid_amount
+  // 3. Calculate and update order.pending_amount
+  // 4. Update order.payment_status ('pending', 'partial', or 'paid')
+  const { data: payment, error: paymentError } = await supabaseAdmin
     .from("payments")
     .insert({
       ...paymentData,
       recorded_by: user.id,
+      status: 'completed', // CRITICAL: Trigger filters by status = 'completed'
     })
     .select()
     .single();
 
   if (paymentError) throw paymentError;
 
-  // Update order paid_amount and pending_amount
-  const { data: order, error: orderFetchError } = await supabase
-    .from("orders")
-    .select("paid_amount, total_amount, pending_amount")
-    .eq("id", paymentData.order_id)
-    .single();
-
-  if (orderFetchError) throw orderFetchError;
-
-  if (paymentData.amount > Number(order.pending_amount)) {
-    throw new Error(`Payment amount (Rs. ${paymentData.amount}) exceeds outstanding balance (Rs. ${order.pending_amount})`);
-  }
-
+  // Calculate what the new amounts should be for audit logging
   const newPaidAmount = (order.paid_amount || 0) + paymentData.amount;
   const newPendingAmount = order.total_amount - newPaidAmount;
-
-  const { error: orderUpdateError } = await supabase
-    .from("orders")
-    .update({
-      paid_amount: newPaidAmount,
-      pending_amount: newPendingAmount,
-      payment_status: newPendingAmount <= 0 ? 'paid' : 'partial'
-    })
-    .eq("id", paymentData.order_id);
-
-  if (orderUpdateError) throw orderUpdateError;
 
   await logAudit({
     action: "PAYMENT_RECORDED",
@@ -334,6 +364,7 @@ export async function recordPayment(paymentData: {
 
   revalidatePath("/admin/payments");
   revalidatePath("/admin/orders");
+  revalidatePath("/sub-admin/orders");
   return { success: true, data: payment };
 }
 

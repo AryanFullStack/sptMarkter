@@ -14,9 +14,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Eye, DollarSign, User } from "lucide-react";
+import { Search, Eye, DollarSign, User, FileText } from "lucide-react";
 import { loadAdminOrdersAction, updateOrderStatusAction, recordPayment as recordPaymentAction } from "@/app/admin/actions";
 import { useToast } from "@/hooks/use-toast";
+import { OrderInvoice } from "@/components/shared/order-invoice";
 
 export default function OrdersManagementPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -27,6 +28,7 @@ export default function OrdersManagementPage() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [paymentNotes, setPaymentNotes] = useState("");
@@ -259,6 +261,17 @@ export default function OrdersManagementPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                            onClick={() => {
+                              setSelectedOrder(order);
+                              setIsInvoiceOpen(true);
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
                           {order.total_amount > order.paid_amount && (
                             <Button
                               size="sm"
@@ -442,6 +455,14 @@ export default function OrdersManagementPage() {
                 </Button>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+        <Dialog open={isInvoiceOpen} onOpenChange={setIsInvoiceOpen}>
+          <DialogContent className="max-w-4xl p-0 overflow-hidden bg-transparent border-none">
+            <OrderInvoice
+              order={selectedOrder}
+              onClose={() => setIsInvoiceOpen(false)}
+            />
           </DialogContent>
         </Dialog>
       </main>
