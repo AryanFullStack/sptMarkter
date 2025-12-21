@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Trash, MapPin } from "lucide-react";
 import { updateUserRoleAction, deleteUserAction } from "@/app/admin/actions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { UserPendingLimitDialog } from "./user-pending-limit-dialog";
 
 interface User {
@@ -43,7 +43,6 @@ interface UsersTableProps {
 }
 
 export function UsersTable({ users, onUpdate }: UsersTableProps) {
-    const { toast } = useToast();
     const [updating, setUpdating] = useState<string | null>(null);
     const [selectedUserForLimit, setSelectedUserForLimit] = useState<{ id: string, name: string, role: string } | null>(null);
 
@@ -51,10 +50,10 @@ export function UsersTable({ users, onUpdate }: UsersTableProps) {
         setUpdating(userId);
         try {
             await updateUserRoleAction(userId, newRole);
-            toast({ title: "Role Updated", description: "User role has been updated." });
+            notify.success("Role Updated", "User role has been updated.");
             onUpdate();
         } catch (error: any) {
-            toast({ title: "Error", description: error.message || "Failed to update role", variant: "destructive" });
+            notify.error("Error", error.message || "Failed to update role");
         } finally {
             setUpdating(null);
         }
@@ -64,10 +63,10 @@ export function UsersTable({ users, onUpdate }: UsersTableProps) {
         if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
         try {
             await deleteUserAction(userId);
-            toast({ title: "User Deleted", description: "User has been removed." });
+            notify.success("User Deleted", "User has been removed.");
             onUpdate();
         } catch (error: any) {
-            toast({ title: "Error", description: error.message || "Failed to delete user", variant: "destructive" });
+            notify.error("Error", error.message || "Failed to delete user");
         }
     };
 

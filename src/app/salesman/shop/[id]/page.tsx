@@ -15,13 +15,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 
 export default function ShopDetailPage() {
     const params = useParams();
     const router = useRouter();
     const shopId = params?.id as string;
-    const { toast } = useToast();
 
     const [loading, setLoading] = useState(true);
     const [shopData, setShopData] = useState<any>(null);
@@ -105,7 +104,7 @@ export default function ShopDetailPage() {
 
     const handlePaymentSubmit = async () => {
         if (!paymentAmount || Number(paymentAmount) <= 0) {
-            toast({ title: "Invalid Amount", description: "Please enter a valid amount", variant: "destructive" });
+            notify.error("Invalid Amount", "Please enter a valid amount");
             return;
         }
 
@@ -202,9 +201,9 @@ export default function ShopDetailPage() {
         const res = await recordPartialPayment(paymentOrderId, Number(paymentAmount), "cash", paymentNotes);
 
         if (res.error) {
-            toast({ title: "Payment Failed", description: res.error, variant: "destructive" });
+            notify.error("Payment Failed", res.error);
         } else {
-            toast({ title: "Payment Recorded", description: "Payment has been successfully recorded." });
+            notify.success("Payment Recorded", "Payment has been successfully recorded.");
             setPaymentModalOpen(false);
             loadData(); // Refresh
         }

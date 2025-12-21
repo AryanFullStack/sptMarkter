@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { getSalesmanDashboardData, getOrderDetails } from "@/app/actions/salesman-actions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,7 +21,6 @@ export default function SalesmanOverview() {
     const [orderModalOpen, setOrderModalOpen] = useState(false);
 
     const supabase = createClient();
-    const { toast } = useToast();
 
     useEffect(() => {
         loadData();
@@ -35,7 +34,7 @@ export default function SalesmanOverview() {
                 setData(dashboardData);
             }
         } catch (e) {
-            toast({ title: "Error", description: "Failed to load dashboard data", variant: "destructive" });
+            notify.error("Error", "Failed to load dashboard data");
         }
         setLoading(false);
     }
@@ -48,7 +47,7 @@ export default function SalesmanOverview() {
                 setOrderModalOpen(true);
             }
         } catch (e) {
-            toast({ title: "Error", description: "Failed to load order details" });
+            notify.error("Error", "Failed to load order details");
         }
     }
 

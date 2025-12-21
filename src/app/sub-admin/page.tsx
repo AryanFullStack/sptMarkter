@@ -50,7 +50,6 @@ export default function SubAdminPage() {
     const [pendingUsers, setPendingUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
-    const { toast } = useToast();
 
     useEffect(() => {
         loadDashboardData();
@@ -98,7 +97,7 @@ export default function SubAdminPage() {
             setPendingUsers(pendingUsersData || []);
         } catch (error) {
             console.error("Error loading dashboard data:", error);
-            toast({ title: "Sync Error", description: "Failed to load operational data", variant: "destructive" });
+            notify.error("Sync Error", "Failed to load operational data");
         }
         setLoading(false);
     }
@@ -117,10 +116,10 @@ export default function SubAdminPage() {
         if (!confirm("Are you sure?")) return;
         try {
             await deleteUserAction(userId);
-            toast({ title: "Registry Updated", description: "Application rejected." });
+            notify.success("Registry Updated", "Application rejected.");
             loadDashboardData();
         } catch (error: any) {
-            toast({ title: "Action Failed", description: error.message, variant: "destructive" });
+            notify.error("Action Failed", error.message);
         }
     };
 

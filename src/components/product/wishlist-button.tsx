@@ -3,7 +3,7 @@
 import { useWishlist } from "@/context/wishlist-context";
 import { Button } from "@/components/ui/button";
 import { Heart } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 
 interface WishlistButtonProps {
     product: any;
@@ -13,7 +13,6 @@ interface WishlistButtonProps {
 
 export function WishlistButton({ product, className = "", iconOnly = false }: WishlistButtonProps) {
     const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
-    const { toast } = useToast();
     const inWishlist = isInWishlist(product.id);
 
     const toggleWishlist = async () => {
@@ -28,27 +27,17 @@ export function WishlistButton({ product, className = "", iconOnly = false }: Wi
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) {
-            toast({
-                title: "Login Required",
-                description: "Please login to manage your wishlist.",
-                variant: "destructive",
-            });
+            notify.error("Login Required", "Please login to manage your wishlist.");
             window.location.href = "/sign-in";
             return;
         }
 
         if (inWishlist) {
             removeFromWishlist(product.id);
-            toast({
-                title: "Removed from wishlist",
-                description: `${product.name} removed from your wishlist.`,
-            });
+            notify.success("Removed from wishlist", `${product.name} removed from your wishlist.`);
         } else {
             addToWishlist(product);
-            toast({
-                title: "Added to wishlist!",
-                description: `${product.name} added to your wishlist.`,
-            });
+            notify.success("Added to wishlist!", `${product.name} added to your wishlist.`);
         }
     };
 

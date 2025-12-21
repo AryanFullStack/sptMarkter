@@ -11,7 +11,7 @@ import { DollarSign, CreditCard, AlertCircle, Clock, User, Store } from "lucide-
 import { formatCurrency, formatDate } from "@/utils/export-utils";
 import { getConsolidatedPendingPaymentsAction } from "@/app/admin/actions";
 import { PaymentRequestManagement } from "@/components/shared/payment-request-management";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 
 interface Order {
     id: string;
@@ -40,7 +40,6 @@ export default function PaymentsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const { toast } = useToast();
 
     useEffect(() => {
         loadData();
@@ -50,13 +49,14 @@ export default function PaymentsPage() {
         setLoading(true);
         try {
             const data = await getConsolidatedPendingPaymentsAction();
-            setOrders(data as Order[]);
+            const formattedOrders = (data as any[]).map(order => ({
+                ...order,
+                user: order.user?.[0] || null,
+                recorded_by_user: order.recorded_by_user?.[0] || null
+            }));
+            setOrders(formattedOrders as Order[]);
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: "Failed to load pending payments",
-                variant: "destructive"
-            });
+            notify.error("Error", "Failed to load pending payments");
         } finally {
             setLoading(false);
         }

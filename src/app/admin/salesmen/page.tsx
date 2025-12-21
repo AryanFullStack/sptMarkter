@@ -28,7 +28,7 @@ import {
     Mail,
     Phone
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { formatCurrency } from "@/utils/export-utils";
 import { getSalesmenPerformanceAction } from "@/app/admin/actions";
 import { useRouter } from "next/navigation";
@@ -39,7 +39,6 @@ export default function SalesmenPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedSalesman, setSelectedSalesman] = useState<any>(null);
-    const { toast } = useToast();
     const router = useRouter();
 
     useEffect(() => {
@@ -64,11 +63,7 @@ export default function SalesmenPage() {
             setPerformanceData(data);
             setFilteredData(data);
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: "Failed to load performance data",
-                variant: "destructive"
-            });
+            notify.error("Error", "Failed to load performance data");
         } finally {
             setLoading(false);
         }
