@@ -433,7 +433,7 @@ export default function AdminDashboard() {
                             <TableHead>Execution Date</TableHead>
                             <TableHead className="text-right">Commitment</TableHead>
                             <TableHead className="text-right">Current Paid</TableHead>
-                            <TableHead className="text-right">Outstanding</TableHead>
+                            <TableHead className="text-right">Pending</TableHead>
                             <TableHead className="text-center">Agent</TableHead>
                             <TableHead className="pr-6 text-right">Actions</TableHead>
                           </TableRow>

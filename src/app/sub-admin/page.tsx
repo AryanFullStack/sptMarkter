@@ -348,51 +348,67 @@ export default function SubAdminPage() {
                     </Card>
                 </TabsContent>
 
+
                 <TabsContent value="payments" className="animate-in slide-in-from-right-4 duration-300">
                     <Card className="border-none shadow-sm overflow-hidden">
                         <CardHeader className="border-b border-[#F7F5F2] pb-6">
                             <CardTitle className="font-serif text-2xl flex items-center gap-3">
                                 <AlertCircle className="h-7 w-7 text-orange-500" />
-                                Assigned Collections
+                                Financial Verification
                             </CardTitle>
-                            <CardDescription>Reconciliation pipeline for your assigned market routes</CardDescription>
+                            <CardDescription>Review and approve payment requests from your assigned clients</CardDescription>
                         </CardHeader>
-                        <CardContent className="p-0">
-                            {pendingPaymentOrders.length === 0 ? (
-                                <div className="text-center py-24 bg-[#FDFCF9]/50">
-                                    <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50 text-green-500" />
-                                    <p className="text-lg font-medium text-[#6B6B6B]">Treasury cleared. No collections pending.</p>
-                                </div>
-                            ) : (
-                                <Table>
-                                    <TableHeader className="bg-gray-50/50">
-                                        <TableRow>
-                                            <TableHead className="pl-6 py-4">Ref</TableHead>
-                                            <TableHead>Total</TableHead>
-                                            <TableHead>Outstanding</TableHead>
-                                            <TableHead className="pr-6 text-right">Authorization</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {pendingPaymentOrders.map((order) => (
-                                            <TableRow key={order.id} className="hover:bg-[#FDFCF9] group transition-all">
-                                                <TableCell className="pl-6 py-6 font-mono font-bold text-xs">#{order.order_number || order.id.slice(0, 8)}</TableCell>
-                                                <TableCell>Rs. {Number(order.total_amount).toLocaleString()}</TableCell>
-                                                <TableCell className="text-red-600 font-extrabold">Rs. {Number(order.pending_amount).toLocaleString()}</TableCell>
-                                                <TableCell className="pr-6 text-right">
-                                                    <Button
-                                                        size="sm"
-                                                        className="bg-[#2D5F3F] hover:bg-[#1E422B] text-white shadow-md shadow-[#2D5F3F]/20 border-none px-6 h-10"
-                                                        onClick={() => handleMarkPaid(order.id)}
-                                                    >
-                                                        Finalize Collection
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            )}
+                        <CardContent className="p-6">
+                            <div className="space-y-12">
+                                <section>
+                                    <PaymentRequestManagement />
+                                </section>
+
+                                <section className="border-t pt-10">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="font-serif text-2xl text-[#1A1A1A]">Assigned Collections</h3>
+                                        <Badge variant="outline" className="border-[#2D5F3F] text-[#2D5F3F]">Reconciliation Pipeline</Badge>
+                                    </div>
+
+                                    {pendingPaymentOrders.length === 0 ? (
+                                        <div className="text-center py-20 bg-[#FDFCF9]/50 rounded-2xl border-2 border-dashed border-[#E8E8E8]">
+                                            <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50 text-green-500" />
+                                            <p className="text-lg font-medium text-[#6B6B6B]">Treasury cleared. No collections pending.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="border rounded-xl overflow-hidden shadow-sm bg-white">
+                                            <Table>
+                                                <TableHeader className="bg-gray-50/50">
+                                                    <TableRow>
+                                                        <TableHead className="pl-6 py-4">Ref</TableHead>
+                                                        <TableHead>Total</TableHead>
+                                                        <TableHead>Outstanding</TableHead>
+                                                        <TableHead className="pr-6 text-right">Authorization</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {pendingPaymentOrders.map((order) => (
+                                                        <TableRow key={order.id} className="hover:bg-[#FDFCF9] group transition-all">
+                                                            <TableCell className="pl-6 py-6 font-mono font-bold text-xs">#{order.order_number || order.id.slice(0, 8)}</TableCell>
+                                                            <TableCell>Rs. {Number(order.total_amount).toLocaleString()}</TableCell>
+                                                            <TableCell className="text-red-600 font-extrabold">Rs. {Number(order.pending_amount).toLocaleString()}</TableCell>
+                                                            <TableCell className="pr-6 text-right">
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="bg-[#2D5F3F] hover:bg-[#1E422B] text-white shadow-md shadow-[#2D5F3F]/20 border-none px-6 h-10"
+                                                                    onClick={() => handleMarkPaid(order.id)}
+                                                                >
+                                                                    Finalize Collection
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    )}
+                                </section>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
