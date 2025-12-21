@@ -16,6 +16,14 @@ import { loadSubAdminOrdersAction } from "@/app/admin/actions";
 import { cn } from "@/lib/utils";
 import { OrderInvoice } from "@/components/shared/order-invoice";
 
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
 export default function SubAdminOrdersPage() {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -109,56 +117,51 @@ export default function SubAdminOrdersPage() {
             key: "actions",
             header: "Management",
             render: (o) => (
-                <div className="flex gap-2">
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        className="hover:bg-[#FDFCF9] hover:text-[#2D5F3F]"
-                        onClick={() => {
-                            setSelectedOrder(o);
-                            setIsDetailOpen(true);
-                        }}
-                    >
-                        <Eye className="h-5 w-5" />
-                    </Button>
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        className="hover:bg-[#FDFCF9] hover:text-blue-600"
-                        onClick={() => {
-                            setSelectedOrder(o);
-                            setIsInvoiceOpen(true);
-                        }}
-                    >
-                        <FileText className="h-5 w-5" />
-                    </Button>
-
-                    {/* Status Dropdown */}
-                    <div className="relative group">
+                <div className="flex gap-3 items-center">
+                    <div className="flex gap-1">
                         <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-[#2D5F3F] text-[#2D5F3F] hover:bg-[#2D5F3F] hover:text-white flex items-center gap-1"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 hover:bg-[#FDFCF9] hover:text-[#2D5F3F]"
+                            onClick={() => {
+                                setSelectedOrder(o);
+                                setIsDetailOpen(true);
+                            }}
                         >
-                            Update <ChevronRight className="h-3 w-3 rotate-90" />
+                            <Eye className="h-4 w-4" />
                         </Button>
-                        <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-[#E8E8E8] shadow-lg rounded-md hidden group-hover:block z-50">
-                            {['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map((status) => (
-                                <button
-                                    key={status}
-                                    className="w-full text-left px-4 py-2 text-xs hover:bg-[#FDFCF9] hover:text-[#2D5F3F] capitalize first:rounded-t-md last:rounded-b-md"
-                                    onClick={() => handleUpdateStatus(o.id, status)}
-                                    disabled={o.status === status}
-                                >
-                                    {status}
-                                </button>
-                            ))}
-                        </div>
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 hover:bg-[#FDFCF9] hover:text-blue-600"
+                            onClick={() => {
+                                setSelectedOrder(o);
+                                setIsInvoiceOpen(true);
+                            }}
+                        >
+                            <FileText className="h-4 w-4" />
+                        </Button>
                     </div>
+
+                    <Select
+                        defaultValue={o.status}
+                        onValueChange={(value) => handleUpdateStatus(o.id, value)}
+                    >
+                        <SelectTrigger className="w-[130px] h-8 text-[11px] font-bold uppercase border-[#E8E8E8] bg-white focus:ring-0 focus:ring-offset-0">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent className="border-[#E8E8E8] shadow-xl">
+                            <SelectItem value="pending" className="text-[11px] font-bold uppercase py-2">Pending</SelectItem>
+                            <SelectItem value="processing" className="text-[11px] font-bold uppercase py-2">Processing</SelectItem>
+                            <SelectItem value="shipped" className="text-[11px] font-bold uppercase py-2">Shipped</SelectItem>
+                            <SelectItem value="delivered" className="text-[11px] font-bold uppercase py-2">Delivered</SelectItem>
+                            <SelectItem value="cancelled" className="text-[11px] font-bold uppercase py-2 text-red-600">Cancelled</SelectItem>
+                        </SelectContent>
+                    </Select>
 
                     <Button
                         size="sm"
-                        className="bg-[#1A1A1A] hover:bg-[#333333] text-white"
+                        className="h-8 bg-[#1A1A1A] hover:bg-[#333333] text-white text-[11px] font-bold uppercase px-4"
                         onClick={() => {
                             setSelectedOrder(o);
                             setShowPaymentModal(true);

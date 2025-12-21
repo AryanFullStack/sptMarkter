@@ -15,9 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Eye, DollarSign, User, FileText } from "lucide-react";
-import { loadAdminOrdersAction, updateOrderStatusAction, recordPayment as recordPaymentAction } from "@/app/admin/actions";
+import { loadAdminOrdersAction, updateOrderStatus as updateOrderStatusAction } from "@/app/admin/actions";
 import { useToast } from "@/hooks/use-toast";
 import { OrderInvoice } from "@/components/shared/order-invoice";
+import { PaymentRecordModal } from "@/components/admin/payment-record-modal";
 
 export default function OrdersManagementPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -27,12 +28,9 @@ export default function OrdersManagementPage() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [statusToUpdate, setStatusToUpdate] = useState("");
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [paymentNotes, setPaymentNotes] = useState("");
-  const [statusToUpdate, setStatusToUpdate] = useState("");
   const supabase = createClient();
   const router = useRouter();
   const { toast } = useToast();
@@ -114,35 +112,6 @@ export default function OrdersManagementPage() {
     }
   }
 
-  async function recordPayment() {
-    if (!selectedOrder) return;
-
-    try {
-      await recordPaymentAction({
-        order_id: selectedOrder.id,
-        amount: paymentAmount,
-        payment_method: paymentMethod,
-        notes: paymentNotes,
-      });
-
-      toast({
-        title: "Payment Recorded",
-        description: `Payment of Rs. ${paymentAmount} recorded successfully`
-      });
-
-      setIsPaymentOpen(false);
-      setPaymentAmount(0);
-      setPaymentNotes("");
-      loadOrders();
-    } catch (error: any) {
-      console.error("Payment recording failed:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to record payment",
-        variant: "destructive"
-      });
-    }
-  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -243,7 +212,7 @@ export default function OrdersManagementPage() {
                       <TableCell>Rs. {order.total_amount?.toFixed(2)}</TableCell>
                       <TableCell>Rs. {order.paid_amount?.toFixed(2)}</TableCell>
                       <TableCell className="text-[#C77D2E]">
-                        Rs. {(order.total_amount - order.paid_amount).toFixed(2)}
+                        Rs. {(order.pending_amount || 0).toFixed(2)}
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
@@ -272,14 +241,13 @@ export default function OrdersManagementPage() {
                           >
                             <FileText className="h-4 w-4" />
                           </Button>
-                          {order.total_amount > order.paid_amount && (
+                          {order.pending_amount > 0 && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="text-[#D4AF37]"
                               onClick={() => {
                                 setSelectedOrder(order);
-                                setPaymentAmount(order.total_amount - order.paid_amount);
                                 setIsPaymentOpen(true);
                               }}
                             >
@@ -399,64 +367,20 @@ export default function OrdersManagementPage() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-serif text-2xl">Record Payment</DialogTitle>
-            </DialogHeader>
-            {selectedOrder && (
-              <div className="space-y-4">
-                <div>
-                  <Label>Order Number</Label>
-                  <p className="font-mono">{selectedOrder.order_number}</p>
-                </div>
-                <div>
-                  <Label>Pending Amount</Label>
-                  <p className="text-lg font-semibold text-[#C77D2E]">
-                    Rs. {(selectedOrder.total_amount - selectedOrder.paid_amount).toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <Label>Payment Amount</Label>
-                  <Input
-                    type="number"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                    max={selectedOrder.total_amount - selectedOrder.paid_amount}
-                  />
-                </div>
-                <div>
-                  <Label>Payment Method</Label>
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                      <SelectItem value="upi">UPI</SelectItem>
-                      <SelectItem value="card">Card</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Notes (Optional)</Label>
-                  <Textarea
-                    value={paymentNotes}
-                    onChange={(e) => setPaymentNotes(e.target.value)}
-                    placeholder="Add any notes about this payment..."
-                  />
-                </div>
-                <Button
-                  onClick={recordPayment}
-                  className="w-full bg-[#D4AF37] hover:bg-[#C19B2E] text-white"
-                >
-                  Record Payment
-                </Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {isPaymentOpen && selectedOrder && (
+          <PaymentRecordModal
+            order={selectedOrder}
+            onClose={() => {
+              setIsPaymentOpen(false);
+              setSelectedOrder(null);
+            }}
+            onSuccess={() => {
+              setIsPaymentOpen(false);
+              setSelectedOrder(null);
+              loadOrders();
+            }}
+          />
+        )}
         <Dialog open={isInvoiceOpen} onOpenChange={setIsInvoiceOpen}>
           <DialogContent className="max-w-4xl p-0 overflow-hidden bg-transparent border-none">
             <OrderInvoice
