@@ -375,26 +375,32 @@ export async function recordPayment(paymentData: {
 
 // Order Management Actions
 export async function updateOrderStatus(orderId: string, status: string) {
-  const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  // Check permissions - both admin and sub_admin can update status
+  await checkPermissions(['admin', 'sub_admin']);
 
-  const { error } = await supabase
+  const supabaseAdmin = createAdminClient();
+  if (!supabaseAdmin) throw new Error("Admin client unavailable");
+
+  const { error } = await supabaseAdmin
     .from("orders")
     .update({ status })
     .eq("id", orderId);
 
-  if (error) throw error;
+  if (error) {
+    console.error("Error updating order status:", error);
+    throw new Error(error.message);
+  }
 
+  // Log audit
   await logAudit({
     action: "ORDER_STATUS_UPDATED",
     entity_type: "order",
     entity_id: orderId,
     changes: { status },
-  });
+  }, supabaseAdmin); // Pass admin client to bypass RLS in audit log if needed
 
   revalidatePath("/admin/orders");
+  revalidatePath("/sub-admin/orders");
   return { success: true };
 }
 
@@ -589,19 +595,6 @@ export async function getPendingUsersAction() {
     return users;
 }
 
-export async function updateOrderStatusAction(orderId: string, status: string) {
-    const supabase = createAdminClient();
-    if (!supabase) throw new Error("Admin client unavailable");
-    
-    const { error } = await supabase
-        .from("orders")
-        .update({ status })
-        .eq("id", orderId);
-        
-    if (error) throw new Error(error.message);
-    revalidatePath("/admin/orders");
-    return { success: true };
-}
 
 export async function deleteUserAction(userId: string) {
     console.log(`[deleteUserAction] Start deleting user: ${userId}`);

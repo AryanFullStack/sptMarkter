@@ -95,9 +95,11 @@ export default function SubAdminOrdersPage() {
                 <Badge className={cn(
                     "px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
                     o.status === 'delivered' ? "bg-green-50 text-green-700 border-green-200" :
-                        o.status === 'processing' ? "bg-amber-50 text-amber-700 border-amber-200" :
-                            o.status === 'shipped' ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                "bg-gray-50 text-gray-700 border-gray-200"
+                        o.status === 'shipped' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                            o.status === 'processing' ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                o.status === 'pending' ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
+                                    o.status === 'cancelled' ? "bg-red-50 text-red-700 border-red-200" :
+                                        "bg-gray-50 text-gray-700 border-gray-200"
                 )}>
                     {o.status}
                 </Badge>
@@ -130,15 +132,30 @@ export default function SubAdminOrdersPage() {
                     >
                         <FileText className="h-5 w-5" />
                     </Button>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-[#2D5F3F] text-[#2D5F3F] hover:bg-[#2D5F3F] hover:text-white"
-                        onClick={() => handleUpdateStatus(o.id, "processing")}
-                        disabled={o.status === 'processing' || o.status === 'delivered'}
-                    >
-                        Dispatch
-                    </Button>
+
+                    {/* Status Dropdown */}
+                    <div className="relative group">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-[#2D5F3F] text-[#2D5F3F] hover:bg-[#2D5F3F] hover:text-white flex items-center gap-1"
+                        >
+                            Update <ChevronRight className="h-3 w-3 rotate-90" />
+                        </Button>
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-[#E8E8E8] shadow-lg rounded-md hidden group-hover:block z-50">
+                            {['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map((status) => (
+                                <button
+                                    key={status}
+                                    className="w-full text-left px-4 py-2 text-xs hover:bg-[#FDFCF9] hover:text-[#2D5F3F] capitalize first:rounded-t-md last:rounded-b-md"
+                                    onClick={() => handleUpdateStatus(o.id, status)}
+                                    disabled={o.status === status}
+                                >
+                                    {status}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     <Button
                         size="sm"
                         className="bg-[#1A1A1A] hover:bg-[#333333] text-white"
