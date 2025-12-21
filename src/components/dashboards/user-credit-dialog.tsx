@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createClient } from "@/supabase/client";
 import {
     Dialog,
     DialogContent,
@@ -21,8 +22,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { CreditCard, History, Plus, Minus, RefreshCcw } from "lucide-react";
-import { getUserCredit, getCreditTransactions, updateUserCredit } from "@/app/actions/credit-actions";
-import { useToast } from "@/hooks/use-toast";
+import { getUserCredit, getCreditTransactions, updateUserCredit } from "../../app/actions/credit-actions";
+import { notify } from "@/lib/notifications";
 
 interface UserCreditDialogProps {
     userId: string;
@@ -39,7 +40,6 @@ export function UserCreditDialog({ userId, userName, isOpen, onClose }: UserCred
     const [type, setType] = useState<"add" | "deduct" | "adjustment">("add");
     const [description, setDescription] = useState("");
     const [submitting, setSubmitting] = useState(false);
-    const { toast } = useToast();
 
     useEffect(() => {
         if (isOpen && userId) {
@@ -50,15 +50,21 @@ export function UserCreditDialog({ userId, userName, isOpen, onClose }: UserCred
     async function loadData() {
         setLoading(true);
         try {
-            const [creditData, txData] = await Promise.all([
+            const [creditRes, txRes] = await Promise.all([
                 getUserCredit(userId),
                 getCreditTransactions(userId)
             ]);
-            setBalance(creditData);
-            setTransactions(txData);
+
+            if (creditRes.success && creditRes.balance) {
+                setBalance(creditRes.balance as any);
+            }
+
+            if (txRes.success && txRes.transactions) {
+                setTransactions(txRes.transactions);
+            }
         } catch (e) {
             console.error(e);
-            toast({ title: "Error", description: "Failed to load credit data", variant: "destructive" });
+            notify.error("Error", "Failed to load credit data");
         }
         setLoading(false);
     }
@@ -66,22 +72,33 @@ export function UserCreditDialog({ userId, userName, isOpen, onClose }: UserCred
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!amount || isNaN(Number(amount))) {
-            toast({ title: "Invalid Amount", variant: "destructive" });
+            notify.error("Invalid Amount", "Please enter a valid numeric value.");
             return;
         }
         setSubmitting(true);
         try {
-            const result = await updateUserCredit(userId, Number(amount), type, description);
-            if (result.error) {
-                toast({ title: "Error", description: result.error, variant: "destructive" });
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            const currentUserId = user?.id || "system";
+
+            const result = await updateUserCredit(
+                userId,
+                Number(amount),
+                type,
+                description,
+                currentUserId
+            );
+
+            if (!result.success) {
+                notify.error("Error", result.error || "Failed to update credit");
             } else {
-                toast({ title: "Success", description: "Credit updated successfully" });
+                notify.success("Success", "Credit updated successfully");
                 setAmount("");
                 setDescription("");
                 loadData(); // Reload data
             }
         } catch (e: any) {
-            toast({ title: "Error", description: e.message, variant: "destructive" });
+            notify.error("Error", e.message);
         }
         setSubmitting(false);
     }

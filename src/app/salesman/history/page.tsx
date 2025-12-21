@@ -6,7 +6,7 @@ import { getSalesmanOrderHistory, getOrderDetails } from "@/app/actions/salesman
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Eye, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -18,7 +18,6 @@ export default function OrderHistoryPage() {
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [orderModalOpen, setOrderModalOpen] = useState(false);
     const supabase = createClient();
-    const { toast } = useToast();
 
     useEffect(() => {
         loadData();
@@ -41,7 +40,7 @@ export default function OrderHistoryPage() {
                 setOrderModalOpen(true);
             }
         } catch (e) {
-            toast({ title: "Error", description: "Failed to load order details" });
+            notify.error("Error", "Failed to load order details");
         }
     }
 

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Package, Search, Filter, ArrowUpRight, ArrowDownRight, RefreshCw, AlertCircle, Warehouse, Layers } from "lucide-react";
 import { adjustStock } from "@/app/admin/actions";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 
 export default function SubAdminStockPage() {
     const [products, setProducts] = useState<any[]>([]);
@@ -19,7 +19,6 @@ export default function SubAdminStockPage() {
     const [adjustingProduct, setAdjustingProduct] = useState<any>(null);
     const [adjustment, setAdjustment] = useState({ quantity: 0, reason: "" });
     const supabase = createClient();
-    const { toast } = useToast();
 
     useEffect(() => {
         loadProducts();
@@ -36,7 +35,7 @@ export default function SubAdminStockPage() {
             setProducts(data || []);
         } catch (error) {
             console.error("Error loading products:", error);
-            toast({ title: "Error", description: "Failed to load product registry", variant: "destructive" });
+            notify.error("Error", "Failed to load product registry");
         }
         setLoading(false);
     }
@@ -46,13 +45,13 @@ export default function SubAdminStockPage() {
 
         try {
             await adjustStock(adjustingProduct.id, adjustment.quantity, adjustment.reason);
-            toast({ title: "Registry Updated", description: `${adjustingProduct.name} stock adjusted by ${adjustment.quantity} units.` });
+            notify.success("Registry Updated", `${adjustingProduct.name} stock adjusted by ${adjustment.quantity} units.`);
             setAdjustingProduct(null);
             setAdjustment({ quantity: 0, reason: "" });
             loadProducts();
         } catch (error) {
             console.error("Error adjusting stock:", error);
-            toast({ title: "Action Failed", description: "Failed to update inventory record", variant: "destructive" });
+            notify.error("Action Failed", "Failed to update inventory record");
         }
     };
 

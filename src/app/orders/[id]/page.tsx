@@ -11,16 +11,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound, useSearchParams, useRouter } from "next/navigation";
 import { cancelOrderAction } from "@/app/actions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [shippingAddress, setShippingAddress] = useState<any>(null);
   const supabase = createClient();
   const searchParams = useSearchParams();
   const isSuccess = searchParams.get("success") === "true";
-  const { toast } = useToast();
   const router = useRouter();
 
   const handleCancelOrder = async () => {
@@ -30,10 +30,10 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     const result = await cancelOrderAction(params.id);
 
     if (result.error) {
-      toast({ title: "Error", description: result.error, variant: "destructive" });
+      notify.error("Error", result.error);
       setLoading(false);
     } else {
-      toast({ title: "Order Cancelled", description: "Your order has been cancelled successfully." });
+      notify.success("Order Cancelled", "Your order has been cancelled successfully.");
       setOrder({ ...order, status: 'cancelled' }); // Optimistic update
       router.refresh(); // Refresh server data
       setLoading(false);

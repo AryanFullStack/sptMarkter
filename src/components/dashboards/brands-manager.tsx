@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Trash, Plus, Search, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import {
     getBrands,
     createBrand,
@@ -40,7 +40,6 @@ export function BrandsManager() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
     const [submitting, setSubmitting] = useState(false);
-    const { toast } = useToast();
 
     useEffect(() => {
         loadBrands();
@@ -79,9 +78,9 @@ export function BrandsManager() {
         }
 
         if (result?.error) {
-            toast({ title: "Error", description: result.error, variant: "destructive" });
+            notify.error("Error", result.error);
         } else {
-            toast({ title: "Success", description: `Brand ${editingBrand ? "updated" : "created"} successfully` });
+            notify.success("Success", `Brand ${editingBrand ? "updated" : "created"} successfully`);
             setIsDialogOpen(false);
             setEditingBrand(null);
             loadBrands();
@@ -93,9 +92,9 @@ export function BrandsManager() {
         if (!confirm("Are you sure? This will remove the brand from products.")) return;
         const result = await deleteBrand(id);
         if (result.error) {
-            toast({ title: "Error", description: result.error, variant: "destructive" });
+            notify.error("Error", result.error);
         } else {
-            toast({ title: "Deleted", description: "Brand deleted successfully" });
+            notify.success("Deleted", "Brand deleted successfully");
             loadBrands();
         }
     }
@@ -103,7 +102,7 @@ export function BrandsManager() {
     async function handleToggleStatus(id: string, current: boolean) {
         const result = await toggleBrandStatus(id, current);
         if (result.error) {
-            toast({ title: "Error", description: result.error, variant: "destructive" });
+            notify.error("Error", result.error);
         } else {
             loadBrands();
         }

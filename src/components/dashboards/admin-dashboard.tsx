@@ -45,7 +45,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import {
   loadAdminDashboardDataAction,
   deleteUserAction,
@@ -82,7 +82,6 @@ export default function AdminDashboard() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const supabase = createClient();
-  const { toast } = useToast();
 
   useEffect(() => {
     loadDashboardData();
@@ -101,7 +100,7 @@ export default function AdminDashboard() {
       setPendingPaymentOrders(data.pendingPaymentOrders || []);
     } catch (e) {
       console.error("Dashboard Load Error", e);
-      toast({ title: "Error", description: "Failed to load dashboard data" });
+      notify.error("Error", "Failed to load dashboard data");
     }
     setLoading(false);
   }
@@ -109,20 +108,20 @@ export default function AdminDashboard() {
   const handleApproveUser = async (userId: string) => {
     try {
       await approveUserAction(userId);
-      toast({ title: "User Approved", description: "User account has been activated." });
+      notify.success("User Approved", "User account has been activated.");
       loadDashboardData();
     } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Failed to approve user", variant: "destructive" });
+      notify.error("Error", error.message || "Failed to approve user");
     }
   };
 
   const handleMarkPaid = async (orderId: string, amount: number) => {
     try {
       await markOrderPaidAction(orderId, amount);
-      toast({ title: "Payment Recorded", description: "Order marked as fully paid." });
+      notify.success("Payment Recorded", "Order marked as fully paid.");
       loadDashboardData();
     } catch (error) {
-      toast({ title: "Error", description: "Failed to update payment", variant: "destructive" });
+      notify.error("Error", "Failed to update payment");
     }
   }
 

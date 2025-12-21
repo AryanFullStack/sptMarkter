@@ -24,7 +24,7 @@ import {
     History
 } from "lucide-react";
 import Link from "next/link";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 
 interface CartItem {
     id: string;
@@ -39,10 +39,11 @@ interface CartItem {
 export default function CreateOrderPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { toast } = useToast();
 
-    const shopId = searchParams.get("shopId");
-    const brandId = searchParams.get("brandId");
+    const { shopId, brandId } = {
+        shopId: searchParams.get("shopId"),
+        brandId: searchParams.get("brandId")
+    };
 
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<any[]>([]);
@@ -85,7 +86,7 @@ export default function CreateOrderPage() {
             }
         } catch (e) {
             console.error(e);
-            toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
+            notify.error("Error", "Failed to load data");
         } finally {
             setLoading(false);
         }
@@ -155,11 +156,11 @@ export default function CreateOrderPage() {
     const handleSubmit = async () => {
         if (!shopId || !brandId) return;
         if (cart.length === 0) {
-            toast({ title: "Cart is empty", variant: "destructive" });
+            notify.error("Cart is empty", "Please add products to the order");
             return;
         }
         if (!limitCheck.valid) {
-            toast({ title: "Limit Exceeded", description: limitCheck.message, variant: "destructive" });
+            notify.error("Limit Exceeded", limitCheck.message || "Pending amount limit exceeded");
             return;
         }
 
@@ -178,14 +179,14 @@ export default function CreateOrderPage() {
             const result = await createOrderForClient(shopId, items, collectedAmount, brandId, notes);
 
             if (result.error) {
-                toast({ title: "Failed to create order", description: result.error, variant: "destructive" });
+                notify.error("Failed to create order", result.error);
             } else {
-                toast({ title: "Success", description: "Order created successfully" });
+                notify.success("Success", "Order created successfully");
                 router.push(`/salesman/shop/${shopId}`);
             }
         } catch (e) {
             console.error(e);
-            toast({ title: "Error", description: "Something went wrong", variant: "destructive" });
+            notify.error("Error", "Something went wrong while creating the order");
         } finally {
             setIsSubmitting(false);
         }

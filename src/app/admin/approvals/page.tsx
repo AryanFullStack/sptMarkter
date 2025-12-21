@@ -12,7 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { Check, X, UserPlus, Mail, Phone, Calendar, ShieldCheck, UserX } from "lucide-react";
 import { getPendingUsersAction, approveUserAction, deleteUserAction } from "@/app/admin/actions";
 
@@ -20,7 +20,6 @@ export default function ApprovalsPage() {
     const [pendingUsers, setPendingUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const { toast } = useToast();
 
     useEffect(() => {
         loadPendingUsers();
@@ -32,11 +31,7 @@ export default function ApprovalsPage() {
             const data = await getPendingUsersAction();
             setPendingUsers(data);
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: "Failed to load pending users",
-                variant: "destructive",
-            });
+            notify.error("Error", "Failed to load pending users");
         } finally {
             setLoading(false);
         }
@@ -46,14 +41,10 @@ export default function ApprovalsPage() {
         setActionLoading(userId);
         try {
             await approveUserAction(userId);
-            toast({ title: "User Approved", description: "The user account is now active." });
+            notify.success("User Approved", "The user account is now active.");
             loadPendingUsers();
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error.message || "Failed to approve user",
-                variant: "destructive",
-            });
+            notify.error("Error", error.message || "Failed to approve user");
         } finally {
             setActionLoading(null);
         }
@@ -65,14 +56,10 @@ export default function ApprovalsPage() {
         setActionLoading(userId);
         try {
             await deleteUserAction(userId);
-            toast({ title: "Registration Rejected", description: "The user record has been removed." });
+            notify.success("Registration Rejected", "The user record has been removed.");
             loadPendingUsers();
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error.message || "Failed to reject user",
-                variant: "destructive",
-            });
+            notify.error("Error", error.message || "Failed to reject user");
         } finally {
             setActionLoading(null);
         }

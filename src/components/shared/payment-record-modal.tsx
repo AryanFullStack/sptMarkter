@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { Loader2, DollarSign } from "lucide-react";
 
 interface PaymentRecordModalProps {
@@ -35,7 +35,6 @@ export function PaymentRecordModal({
     description,
     buttonText = "Record Payment",
 }: PaymentRecordModalProps) {
-    const { toast } = useToast();
     const [loading, setLoading] = useState(false);
     const [amount, setAmount] = useState("");
     const [paymentMethod, setPaymentMethod] = useState<string>("cash");
@@ -56,29 +55,17 @@ export function PaymentRecordModal({
         const paymentAmount = parseFloat(amount);
 
         if (isNaN(paymentAmount) || paymentAmount <= 0) {
-            toast({
-                title: "Invalid Amount",
-                description: "Please enter a valid payment amount greater than 0",
-                variant: "destructive",
-            });
+            notify.error("Invalid Amount", "Please enter a valid payment amount greater than 0");
             return;
         }
 
         if (paymentAmount > pendingAmount) {
-            toast({
-                title: "Amount Exceeds Pending",
-                description: `Payment amount (${formatCurrency(paymentAmount)}) cannot exceed pending amount (${formatCurrency(pendingAmount)})`,
-                variant: "destructive",
-            });
+            notify.error("Amount Exceeds Pending", `Payment amount (${formatCurrency(paymentAmount)}) cannot exceed pending amount (${formatCurrency(pendingAmount)})`);
             return;
         }
 
         if (!notes.trim()) {
-            toast({
-                title: "Notes Required",
-                description: "Please add notes describing this payment",
-                variant: "destructive",
-            });
+            notify.error("Notes Required", "Please add notes describing this payment");
             return;
         }
 
@@ -88,16 +75,9 @@ export function PaymentRecordModal({
             const result = await recordPaymentAction(orderId, paymentAmount, paymentMethod, notes);
 
             if (result.error) {
-                toast({
-                    title: "Payment Recording Failed",
-                    description: result.error,
-                    variant: "destructive",
-                });
+                notify.error("Payment Recording Failed", result.error);
             } else {
-                toast({
-                    title: "Payment Recorded Successfully",
-                    description: `${formatCurrency(paymentAmount)} payment recorded for order ${orderNumber}`,
-                });
+                notify.success("Payment Recorded Successfully", `${formatCurrency(paymentAmount)} payment recorded for order ${orderNumber}`);
 
                 // Reset form
                 setAmount("");
@@ -109,11 +89,7 @@ export function PaymentRecordModal({
             }
         } catch (error) {
             console.error("Error recording payment:", error);
-            toast({
-                title: "Error",
-                description: "Failed to record payment. Please try again.",
-                variant: "destructive",
-            });
+            notify.error("Error", "Failed to record payment. Please try again.");
         } finally {
             setLoading(false);
         }

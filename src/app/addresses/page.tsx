@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAddress } from "@/context/address-context";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { MainNav } from "@/components/main-nav";
 import { MainFooter } from "@/components/main-footer";
 import { Button } from "@/components/ui/button";
@@ -22,23 +22,14 @@ export default function AddressesPage() {
     const [editingAddress, setEditingAddress] = useState<any>(null);
     const [savingAddress, setSavingAddress] = useState(false);
 
-    const { toast } = useToast();
-
     const handleAddAddress = async (data: any) => {
         setSavingAddress(true);
         try {
             await addAddress(data);
-            toast({
-                title: "Address saved",
-                description: "Your new address has been added successfully.",
-            });
+            notify.success("Address saved", "Your new address has been added successfully.");
             setShowAddForm(false);
         } catch (error: any) {
-            toast({
-                title: "Error saving address",
-                description: error.message || "There was a problem saving your address. Please try again.",
-                variant: "destructive",
-            });
+            notify.error("Error saving address", error.message || "There was a problem saving your address.");
         } finally {
             setSavingAddress(false);
         }
@@ -49,17 +40,10 @@ export default function AddressesPage() {
             setSavingAddress(true);
             try {
                 await updateAddress(editingAddress.id, data);
-                toast({
-                    title: "Address updated",
-                    description: "Your address has been updated successfully.",
-                });
+                notify.success("Address updated", "Your address has been updated successfully.");
                 setEditingAddress(null);
             } catch (error: any) {
-                toast({
-                    title: "Error updating address",
-                    description: error.message || "Failed to update address. Please try again.",
-                    variant: "destructive",
-                });
+                notify.error("Error updating address", error.message || "Failed to update address.");
             } finally {
                 setSavingAddress(false);
             }
@@ -70,16 +54,9 @@ export default function AddressesPage() {
         if (confirm("Are you sure you want to delete this address?")) {
             try {
                 await deleteAddress(id);
-                toast({
-                    title: "Address deleted",
-                    description: "Address has been removed from your account.",
-                });
+                notify.success("Address deleted", "Address has been removed from your account.");
             } catch (error) {
-                toast({
-                    title: "Error deleting address",
-                    description: "Failed to delete address. Please try again.",
-                    variant: "destructive",
-                });
+                notify.error("Error deleting address", "Failed to delete address.");
             }
         }
     };

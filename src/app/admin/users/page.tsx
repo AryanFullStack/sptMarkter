@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Edit, Trash2, Eye, ShieldAlert, ShieldCheck, Mail, Phone, MapPin, ExternalLink, UserCog } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { loadAdminDashboardDataAction, updateUserRoleAction, deleteUserAction, suspendUser } from "@/app/admin/actions";
 
 export default function UsersManagementPage() {
@@ -22,7 +22,6 @@ export default function UsersManagementPage() {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
@@ -39,7 +38,7 @@ export default function UsersManagementPage() {
       const data = await loadAdminDashboardDataAction();
       setUsers(data.allUsers || []);
     } catch (error: any) {
-      toast({ title: "Error", description: "Failed to load users", variant: "destructive" });
+      notify.error("Error", "Failed to load users");
     } finally {
       setLoading(false);
     }
@@ -62,10 +61,10 @@ export default function UsersManagementPage() {
   const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
       await updateUserRoleAction(userId, newRole);
-      toast({ title: "Success", description: "User role updated" });
+      notify.success("Success", "User role updated");
       loadUsers();
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.error("Error", error.message);
     }
   };
 
@@ -73,13 +72,13 @@ export default function UsersManagementPage() {
     const isCurrentlyActive = user.is_active !== false;
     try {
       await suspendUser(user.id, isCurrentlyActive);
-      toast({
-        title: isCurrentlyActive ? "User Suspended" : "User Activated",
-        description: `Account has been ${isCurrentlyActive ? 'suspended' : 'activated'}.`
-      });
+      notify.success(
+        isCurrentlyActive ? "User Suspended" : "User Activated",
+        `Account has been ${isCurrentlyActive ? 'suspended' : 'activated'}.`
+      );
       loadUsers();
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      notify.error("Error", error.message);
     }
   };
 
@@ -244,8 +243,13 @@ export default function UsersManagementPage() {
                         className="h-8 text-[#8B3A3A] hover:bg-red-50"
                         onClick={async () => {
                           if (confirm("Delete this user?")) {
-                            await deleteUserAction(user.id);
-                            loadUsers();
+                            try {
+                              await deleteUserAction(user.id);
+                              notify.success("User Deleted", "The user record has been removed.");
+                              loadUsers();
+                            } catch (e: any) {
+                              notify.error("Deletion Failed", e.message);
+                            }
                           }
                         }}
                       >
