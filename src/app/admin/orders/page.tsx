@@ -14,9 +14,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Eye, DollarSign, User } from "lucide-react";
-import { loadAdminOrdersAction, updateOrderStatusAction } from "@/app/admin/actions";
+import { Search, Eye, DollarSign, User, FileText } from "lucide-react";
+import { loadAdminOrdersAction, updateOrderStatus as updateOrderStatusAction } from "@/app/admin/actions";
 import { useToast } from "@/hooks/use-toast";
+import { OrderInvoice } from "@/components/shared/order-invoice";
+import { PaymentRecordModal } from "@/components/admin/payment-record-modal";
 
 export default function OrdersManagementPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -26,12 +28,9 @@ export default function OrdersManagementPage() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [statusToUpdate, setStatusToUpdate] = useState("");
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [paymentNotes, setPaymentNotes] = useState("");
-  const [statusToUpdate, setStatusToUpdate] = useState("");
   const supabase = createClient();
   const router = useRouter();
 
@@ -112,27 +111,6 @@ export default function OrdersManagementPage() {
     }
   }
 
-  async function recordPayment() {
-    if (!selectedOrder) return;
-
-    try {
-      await recordPaymentAction({
-        order_id: selectedOrder.id,
-        amount: paymentAmount,
-        payment_method: paymentMethod,
-        notes: paymentNotes,
-      });
-
-      toast({
-        title: "Payment Recorded",
-        description: `Payment of Rs. ${paymentAmount} recorded successfully`
-      });
-
-      setIsPaymentOpen(false);
-      setPaymentAmount(0);
-      setPaymentNotes("");
-      loadOrders();
-    }
 
   const getStatusColor = (status: string) => {
       switch (status) {
@@ -193,60 +171,96 @@ export default function OrdersManagementPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </CardContent>
-          </Card>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="shipped">Shipped</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-serif text-2xl">All Orders ({filteredOrders.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order #</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Paid</TableHead>
-                      <TableHead>Pending</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredOrders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell className="font-mono">{order.order_number}</TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{order.users?.full_name || "N/A"}</p>
-                            <p className="text-sm text-[#6B6B6B]">{order.users?.email}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize">{order.users?.role?.replace("_", " ") || "N/A"}</Badge>
-                        </TableCell>
-                        <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
-                        <TableCell>Rs. {order.total_amount?.toFixed(2)}</TableCell>
-                        <TableCell>Rs. {order.paid_amount?.toFixed(2)}</TableCell>
-                        <TableCell className="text-[#C77D2E]">
-                          Rs. {(order.total_amount - order.paid_amount).toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-serif text-2xl">All Orders ({filteredOrders.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Paid</TableHead>
+                    <TableHead>Pending</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-mono">{order.order_number}</TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{order.users?.full_name || "N/A"}</p>
+                          <p className="text-sm text-[#6B6B6B]">{order.users?.email}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">{order.users?.role?.replace("_", " ") || "N/A"}</Badge>
+                      </TableCell>
+                      <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>Rs. {order.total_amount?.toFixed(2)}</TableCell>
+                      <TableCell>Rs. {order.paid_amount?.toFixed(2)}</TableCell>
+                      <TableCell className="text-[#C77D2E]">
+                        Rs. {(order.pending_amount || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedOrder(order);
+                              setStatusToUpdate(order.status);
+                              setIsDetailOpen(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                            onClick={() => {
+                              setSelectedOrder(order);
+                              setIsInvoiceOpen(true);
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
+                          {order.pending_amount > 0 && (
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => {
                                 setSelectedOrder(order);
-                                setStatusToUpdate(order.status);
-                                setIsDetailOpen(true);
+                                setIsPaymentOpen(true);
                               }}
                             >
                               <Eye className="h-4 w-4" />
@@ -444,18 +458,34 @@ export default function OrdersManagementPage() {
                     Record Payment
                   </Button>
                 </div>
-              )}
-            </DialogContent>
-          </Dialog>
-          <Dialog open={isInvoiceOpen} onOpenChange={setIsInvoiceOpen}>
-            <DialogContent className="max-w-4xl p-0 overflow-hidden bg-transparent border-none">
-              <OrderInvoice
-                order={selectedOrder}
-                onClose={() => setIsInvoiceOpen(false)}
-              />
-            </DialogContent>
-          </Dialog>
-        </main>
-      </div>
-    );
-  }
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {isPaymentOpen && selectedOrder && (
+          <PaymentRecordModal
+            order={selectedOrder}
+            onClose={() => {
+              setIsPaymentOpen(false);
+              setSelectedOrder(null);
+            }}
+            onSuccess={() => {
+              setIsPaymentOpen(false);
+              setSelectedOrder(null);
+              loadOrders();
+            }}
+          />
+        )}
+        <Dialog open={isInvoiceOpen} onOpenChange={setIsInvoiceOpen}>
+          <DialogContent className="max-w-4xl p-0 overflow-hidden bg-transparent border-none">
+            <OrderInvoice
+              order={selectedOrder}
+              onClose={() => setIsInvoiceOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      </main>
+    </div>
+  );
+}

@@ -293,7 +293,7 @@ export async function createOrderForClient(
       shipping_address: {}, 
       recorded_by: user.id,
       created_via: "salesman",
-      // brand_id: brandId, // Removed to prevent error as column is missing in schema
+      brand_id: brandId, // NEW: Uncommented to ensure triggers can link order to brand ledger
       notes: notes || "Order created by salesman",
     })
     .select()
@@ -304,49 +304,6 @@ export async function createOrderForClient(
     return { error: "Failed to create order" };
   }
 
-  // --- MANUAL LEDGER UPDATE ---
-  // We update the ledger manually to ensure it works even if the brand_id on order is missing or triggers fail
-  if (brandId) {
-    try {
-      // 1. Get current ledger
-      const { data: currentLedger } = await supabase
-        .from("salesman_shop_ledger")
-        .select("*")
-        .eq("salesman_id", user.id)
-        .eq("shop_id", clientId)
-        .eq("brand_id", brandId)
-        .single();
-
-      if (currentLedger) {
-        // Update existing
-        await supabase
-          .from("salesman_shop_ledger")
-          .update({
-            total_sales: Number(currentLedger.total_sales) + totalAmount,
-            total_collected: Number(currentLedger.total_collected) + paidAmount,
-            pending_amount: Number(currentLedger.pending_amount) + pendingAmount,
-            last_updated: new Date().toISOString()
-          })
-          .eq("id", currentLedger.id);
-      } else {
-        // Create new
-        await supabase
-          .from("salesman_shop_ledger")
-          .insert({
-            salesman_id: user.id,
-            shop_id: clientId,
-            brand_id: brandId,
-            total_sales: totalAmount,
-            total_collected: paidAmount,
-            pending_amount: pendingAmount,
-            last_updated: new Date().toISOString()
-          });
-      }
-    } catch (ledgerErr) {
-      console.error("Manual ledger update failed:", ledgerErr);
-    }
-  }
-
   // Record initial payment if any
   if (paidAmount > 0) {
     await supabase.from("payments").insert({
@@ -354,7 +311,8 @@ export async function createOrderForClient(
       amount: paidAmount,
       payment_method: "cash",
       recorded_by: user.id,
-      notes: "Initial payment during order creation"
+      notes: "Initial payment during order creation",
+      status: 'completed' // CRITICAL: Ensure triggers pick up this payment
     });
   }
 
@@ -409,11 +367,18 @@ export async function recordPartialPayment(
   const userRole = userData?.role || "";
 
   // Get order details for validation
-  const { data: order } = await supabase
+  const { data: order, error: orderFetchError } = await supabase
     .from("orders")
     .select("id, user_id, pending_amount, payment_status")
     .eq("id", orderId)
     .single();
+
+  if (orderFetchError) {
+    if (orderFetchError.code === 'PGRST116') {
+      return { error: "Order not found or access restricted" };
+    }
+    return { error: `Failed to fetch order: ${orderFetchError.message}` };
+  }
 
   if (!order) {
     return { error: "Order not found" };
@@ -457,10 +422,7 @@ export async function recordPartialPayment(
     return { error: "Failed to record payment" };
   }
 
-  // UPDATE: If status is completed, update order and ledger
-  if (status === "completed") {
-    await updateOrderAndLedgerAfterPayment(supabase, orderId, amount);
-  }
+  // Note: Database triggers handle order and ledger updates automatically for 'completed' status
 
   // Log activity
   await supabase.from("salesman_activity_logs").insert({
@@ -477,6 +439,9 @@ export async function recordPartialPayment(
 
   revalidatePath("/salesman");
   revalidatePath("/admin");
+  revalidatePath("/admin/orders");
+  revalidatePath("/sub-admin");
+  revalidatePath("/sub-admin/orders");
   revalidatePath("/dashboard");
 
   return { success: true };
@@ -867,101 +832,19 @@ export async function approvePaymentRequest(paymentId: string) {
     return { error: "Failed to approve payment" };
   }
 
-  // UPDATE: Update order and ledger amounts
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("order_id, amount")
-    .eq("id", paymentId)
-    .single();
-
-  if (payment) {
-    await updateOrderAndLedgerAfterPayment(supabase, payment.order_id, payment.amount);
-  }
+  // Note: Database triggers handle order and ledger updates automatically when status becomes 'completed'
 
   revalidatePath("/admin");
+  revalidatePath("/admin/orders");
+  revalidatePath("/sub-admin");
+  revalidatePath("/sub-admin/orders");
   revalidatePath("/salesman");
   revalidatePath("/dashboard");
 
   return { success: true };
 }
 
-/**
- * Internal helper to update order and ledger after a payment is finalized
- */
-async function updateOrderAndLedgerAfterPayment(supabase: any, orderId: string, amount: number) {
-  try {
-    // 1. Get order details
-    const { data: order, error: orderFetchError } = await supabase
-      .from("orders")
-      .select("id, user_id, total_amount, paid_amount, pending_amount, recorded_by, items")
-      .eq("id", orderId)
-      .single();
-
-    if (orderFetchError || !order) {
-      console.error("Order fetch error for update:", orderFetchError);
-      return;
-    }
-
-    const currentPaid = Number(order.paid_amount || 0);
-    const newPaidAmount = currentPaid + amount;
-    const newPendingAmount = Math.max(0, Number(order.total_amount) - newPaidAmount);
-
-    // 2. Update order
-    const { error: orderUpdateError } = await supabase
-      .from("orders")
-      .update({
-        paid_amount: newPaidAmount,
-        pending_amount: newPendingAmount,
-        payment_status: newPaidAmount >= Number(order.total_amount) ? "paid" : "partial"
-      })
-      .eq("id", orderId);
-    
-    if (orderUpdateError) {
-        console.error("Order update error:", orderUpdateError);
-    }
-
-    // 3. Update Salesman Shop Ledger
-    // Find the brand from the items (assuming all items in one order are from one brand for salesman orders)
-    let brandId = null;
-    if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-        const firstItem = order.items[0];
-        // We might need to fetch the product to get the brand_id
-        if (firstItem.brand_id) {
-            brandId = firstItem.brand_id;
-        } else if (firstItem.product_id) {
-            const { data: product } = await supabase
-                .from("products")
-                .select("brand_id")
-                .eq("id", firstItem.product_id)
-                .single();
-            brandId = product?.brand_id;
-        }
-    }
-
-    if (brandId && order.recorded_by) {
-        const { data: targetLedger } = await supabase
-            .from("salesman_shop_ledger")
-            .select("*")
-            .eq("salesman_id", order.recorded_by)
-            .eq("shop_id", order.user_id)
-            .eq("brand_id", brandId)
-            .single();
-        
-        if (targetLedger) {
-            await supabase
-                .from("salesman_shop_ledger")
-                .update({
-                    total_collected: Number(targetLedger.total_collected) + amount,
-                    pending_amount: Math.max(0, Number(targetLedger.pending_amount) - amount),
-                    last_updated: new Date().toISOString()
-                })
-                .eq("id", targetLedger.id);
-        }
-    }
-  } catch (err) {
-    console.error("Failed to update order/ledger amounts:", err);
-  }
-}
+// Helper functions (DELETED: redundant due to database triggers)
 
 /**
  * Get ledger reports for all shops (Admin use)

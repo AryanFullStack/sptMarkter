@@ -367,8 +367,10 @@ export async function recordPayment(paymentData: {
     changes: { ...paymentData, newPaidAmount, newPendingAmount },
   });
 
+  revalidatePath("/admin");
   revalidatePath("/admin/payments");
   revalidatePath("/admin/orders");
+  revalidatePath("/sub-admin");
   revalidatePath("/sub-admin/orders");
   return { success: true, data: payment };
 }
@@ -674,22 +676,45 @@ export async function approveUserAction(userId: string) {
     return { success: true };
 }
 
-export async function markOrderPaidAction(orderId: string, totalAmount: number) {
+export async function markOrderPaidAction(orderId: string) {
+    const user = await checkPermissions(['admin', 'sub_admin']);
     const supabase = createAdminClient();
     if (!supabase) throw new Error("Admin client unavailable");
 
-    const { error } = await supabase
+    // Fetch order to get the remaining balance
+    const { data: order, error: fetchError } = await supabase
         .from("orders")
-        .update({ 
-            paid_amount: totalAmount,
-            pending_amount: 0,
-            payment_status: 'paid' 
-        })
-        .eq("id", orderId);
+        .select("total_amount, paid_amount")
+        .eq("id", orderId)
+        .single();
 
-    if (error) throw new Error(error.message);
+    if (fetchError || !order) throw new Error("Order not found");
+
+    const remaining = Number(order.total_amount) - Number(order.paid_amount || 0);
+
+    if (remaining <= 0) {
+        return { success: true, message: "Order is already fully paid" };
+    }
+
+    // Insert payment record for the remaining amount
+    // The database trigger will handle updating the order and ledger
+    const { error: paymentError } = await supabase
+        .from("payments")
+        .insert({
+            order_id: orderId,
+            amount: remaining,
+            payment_method: "cash", // Default to cash for quick mark-as-paid
+            recorded_by: user.id,
+            status: 'completed',
+            notes: "Marked as paid by administrator"
+        });
+
+    if (paymentError) throw new Error(paymentError.message);
     
     revalidatePath("/admin");
+    revalidatePath("/admin/orders");
+    revalidatePath("/sub-admin");
+    revalidatePath("/sub-admin/orders");
     return { success: true };
 }
 

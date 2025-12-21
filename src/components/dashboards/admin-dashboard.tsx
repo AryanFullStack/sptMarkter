@@ -115,10 +115,10 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleMarkPaid = async (orderId: string, amount: number) => {
+  const handleMarkPaid = async (orderId: string) => {
     try {
-      await markOrderPaidAction(orderId, amount);
-      notify.success("Payment Recorded", "Order marked as fully paid.");
+      await markOrderPaidAction(orderId);
+      toast({ title: "Payment Recorded", description: "Order marked as fully paid." });
       loadDashboardData();
     } catch (error) {
       notify.error("Error", "Failed to update payment");

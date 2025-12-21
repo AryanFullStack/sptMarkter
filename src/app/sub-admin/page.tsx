@@ -31,8 +31,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { notify } from "@/lib/notifications";
-import { approveUserAction, deleteUserAction } from "@/app/admin/actions";
+import { useToast } from "@/hooks/use-toast";
+import { approveUserAction, deleteUserAction, markOrderPaidAction } from "@/app/admin/actions";
 import { Input } from "@/components/ui/input";
 import { PaymentRequestManagement } from "@/components/shared/payment-request-management";
 import Link from "next/link";
@@ -104,17 +104,11 @@ export default function SubAdminPage() {
 
     const handleApproveUser = async (userId: string) => {
         try {
-            const { error } = await supabase
-                .from("users")
-                .update({ approved: new Date().toISOString() })
-                .eq("id", userId);
-
-            if (error) throw error;
-
-            notify.success("Authorization Granted", "User credentials verified and active.");
+            await approveUserAction(userId);
+            toast({ title: "Authorization Granted", description: "User credentials verified and active." });
             loadDashboardData();
-        } catch (error) {
-            notify.error("Verification Failed", "Could not approve user registry entry.");
+        } catch (error: any) {
+            toast({ title: "Verification Failed", description: error.message || "Could not approve user registry entry.", variant: "destructive" });
         }
     };
 
@@ -129,25 +123,13 @@ export default function SubAdminPage() {
         }
     };
 
-    const handleMarkPaid = async (orderId: string, totalAmount: number) => {
+    const handleMarkPaid = async (orderId: string) => {
         try {
-            const { error } = await supabase
-                .from("orders")
-                .update({
-                    paid_amount: totalAmount,
-                    pending_amount: 0,
-                    payment_status: 'completed',
-                    status: 'confirmed',
-                    updated_at: new Date().toISOString()
-                })
-                .eq("id", orderId);
-
-            if (error) throw error;
-
-            notify.success("Treasury Updated", "Order reconciliation complete.");
+            await markOrderPaidAction(orderId);
+            toast({ title: "Treasury Updated", description: "Order reconciliation complete." });
             loadDashboardData();
-        } catch (error) {
-            notify.error("Transaction Error", "Failed to update payment registry.");
+        } catch (error: any) {
+            toast({ title: "Transaction Error", description: error.message || "Failed to update payment registry.", variant: "destructive" });
         }
     };
 
@@ -401,7 +383,7 @@ export default function SubAdminPage() {
                                                     <Button
                                                         size="sm"
                                                         className="bg-[#2D5F3F] hover:bg-[#1E422B] text-white shadow-md shadow-[#2D5F3F]/20 border-none px-6 h-10"
-                                                        onClick={() => handleMarkPaid(order.id, order.total_amount)}
+                                                        onClick={() => handleMarkPaid(order.id)}
                                                     >
                                                         Finalize Collection
                                                     </Button>
