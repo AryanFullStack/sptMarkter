@@ -1,4 +1,5 @@
-import { createClient } from "@/supabase/client";
+import { createClient as createBrowserClient } from "@/supabase/client";
+import { createClient as createServerClient } from "@/supabase/server";
 
 export interface AuditLogEntry {
   action: string;
@@ -8,8 +9,22 @@ export interface AuditLogEntry {
   ip_address?: string;
 }
 
-export async function logAudit(entry: AuditLogEntry) {
-  const supabase = createClient();
+/**
+ * Logs an audit entry.
+ * @param entry The audit log entry details.
+ * @param customSupabase Optional Supabase client (e.g., admin client or a specific server client).
+ */
+export async function logAudit(entry: AuditLogEntry, customSupabase?: any) {
+  let supabase = customSupabase;
+  
+  if (!supabase) {
+    // Determine if we are on the server or browser
+    if (typeof window === 'undefined') {
+      supabase = await createServerClient();
+    } else {
+      supabase = createBrowserClient();
+    }
+  }
   
   const { data: { user } } = await supabase.auth.getUser();
   
@@ -48,7 +63,7 @@ export async function getAuditLogs(filters?: {
   endDate?: string;
   limit?: number;
 }) {
-  const supabase = createClient();
+  const supabase = createBrowserClient();
   
   let query = supabase
     .from("audit_logs")
