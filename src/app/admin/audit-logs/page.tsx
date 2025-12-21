@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, Column } from "@/components/shared/data-table";
 import { ExportButton } from "@/components/shared/export-button";
-import { getAuditLogs } from "@/utils/audit-logger";
+import { getAuditLogsAction } from "@/app/admin/actions/audit-logs";
 import { formatDate } from "@/utils/export-utils";
-import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function AuditLogsPage() {
@@ -20,7 +18,7 @@ export default function AuditLogsPage() {
 
     async function loadLogs() {
         setLoading(true);
-        const data = await getAuditLogs({ limit: 100 });
+        const data = await getAuditLogsAction({ limit: 100 });
         setLogs(data);
         setLoading(false);
     }

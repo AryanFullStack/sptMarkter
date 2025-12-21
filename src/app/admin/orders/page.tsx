@@ -31,8 +31,12 @@ export default function OrdersManagementPage() {
   const [statusToUpdate, setStatusToUpdate] = useState("");
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentNotes, setPaymentNotes] = useState("");
   const supabase = createClient();
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     checkAdmin();
@@ -104,72 +108,63 @@ export default function OrdersManagementPage() {
       if (selectedOrder?.id === orderId) {
         setSelectedOrder((prev: any) => ({ ...prev, status: newStatus }));
       }
-      notify.success("Status Updated", `Order status changed to ${newStatus}`);
+      toast({ title: "Status Updated", description: `Order status changed to ${newStatus}` });
     } catch (error) {
       console.error("Update failed", error);
-      notify.error("Error", "Failed to update status");
+      toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
     }
+  }
+
+  async function recordPayment() {
+    // This function should be implemented or removed if using PaymentRecordModal
+    toast({ title: "Info", description: "Please use the payment modal to record payments" });
   }
 
 
   const getStatusColor = (status: string) => {
-      switch (status) {
-        case "delivered": return "bg-[#2D5F3F] text-white";
-        case "shipped": return "bg-[#C77D2E] text-white";
-        case "processing": return "bg-[#D4AF37] text-white";
-        case "cancelled": return "bg-[#8B3A3A] text-white";
-        default: return "bg-[#6B6B6B] text-white";
-      }
-    };
-
-    if (loading) {
-      return (
-        <div className="min-h-screen bg-[#FDFCF9]">
-          <DashboardNavbar />
-          <div className="container mx-auto px-4 py-16">
-            <p className="text-center text-[#6B6B6B]">Loading...</p>
-          </div>
-        </div>
-      );
+    switch (status) {
+      case "delivered": return "bg-[#2D5F3F] text-white";
+      case "shipped": return "bg-[#C77D2E] text-white";
+      case "processing": return "bg-[#D4AF37] text-white";
+      case "cancelled": return "bg-[#8B3A3A] text-white";
+      default: return "bg-[#6B6B6B] text-white";
     }
+  };
 
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#FDFCF9]">
         <DashboardNavbar />
-        <main className="container mx-auto px-4 py-8">
-          <div className="mb-8">
-            <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A] mb-2">Order Management</h1>
-            <p className="text-[#6B6B6B]">Manage all orders, payments, and deliveries</p>
-          </div>
+        <div className="container mx-auto px-4 py-16">
+          <p className="text-center text-[#6B6B6B]">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="font-serif text-2xl">Filters</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-[#6B6B6B]" />
-                  <Input
-                    placeholder="Search by order number or email..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="processing">Processing</SelectItem>
-                    <SelectItem value="shipped">Shipped</SelectItem>
-                    <SelectItem value="delivered">Delivered</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
+  return (
+    <div className="min-h-screen bg-[#FDFCF9]">
+      <DashboardNavbar />
+      <main className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="font-serif text-4xl font-semibold text-[#1A1A1A] mb-2">Order Management</h1>
+          <p className="text-[#6B6B6B]">Manage all orders, payments, and deliveries</p>
+        </div>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="font-serif text-2xl">Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-[#6B6B6B]" />
+                <Input
+                  placeholder="Search by order number or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
@@ -258,161 +253,116 @@ export default function OrdersManagementPage() {
                             <Button
                               size="sm"
                               variant="outline"
+                              className="text-[#D4AF37]"
                               onClick={() => {
                                 setSelectedOrder(order);
+                                setPaymentAmount(order.pending_amount);
                                 setIsPaymentOpen(true);
                               }}
                             >
-                              <Eye className="h-4 w-4" />
+                              <DollarSign className="h-4 w-4" />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                              onClick={() => {
-                                setSelectedOrder(order);
-                                setIsInvoiceOpen(true);
-                              }}
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
-                            {order.total_amount > order.paid_amount && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-[#D4AF37]"
-                                onClick={() => {
-                                  setSelectedOrder(order);
-                                  setPaymentAmount(order.total_amount - order.paid_amount);
-                                  setIsPaymentOpen(true);
-                                }}
-                              >
-                                <DollarSign className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
 
-          <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle className="font-serif text-2xl">Order Details</DialogTitle>
-              </DialogHeader>
-              {selectedOrder && (
-                <div className="space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label>Order Number</Label>
-                      <p className="font-mono text-lg">{selectedOrder.order_number}</p>
-                    </div>
-
-                    <div>
-                      <Label className="mb-2 block">Status Update</Label>
-                      <div className="flex gap-2">
-                        <Select
-                          value={statusToUpdate}
-                          onValueChange={setStatusToUpdate}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="processing">Processing</SelectItem>
-                            <SelectItem value="shipped">Shipped</SelectItem>
-                            <SelectItem value="delivered">Delivered</SelectItem>
-                            <SelectItem value="cancelled">Cancelled</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button onClick={() => updateOrderStatus(selectedOrder.id, statusToUpdate)}>
-                          Update
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+        <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-serif text-2xl">Order Details</DialogTitle>
+            </DialogHeader>
+            {selectedOrder && (
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Customer</Label>
-                    <p>{selectedOrder.users?.full_name || "N/A"}</p>
-                    <p className="text-sm text-[#6B6B6B]">{selectedOrder.users?.email}</p>
+                    <Label>Order Number</Label>
+                    <p className="font-mono text-lg">{selectedOrder.order_number}</p>
                   </div>
+
                   <div>
-                    <Label>Shipping Address</Label>
-                    {selectedOrder.shipping_address && (
-                      <div className="text-sm">
-                        <p>{selectedOrder.shipping_address.full_name}</p>
-                        <p>{selectedOrder.shipping_address.address_line1}</p>
-                        <p>{selectedOrder.shipping_address.city}, {selectedOrder.shipping_address.state}</p>
-                        <p>{selectedOrder.shipping_address.phone}</p>
-                      </div>
-                    )}
-
-                  </div>
-
-                  {/* Order Items List */}
-                  <div>
-                    <Label className="mb-2 block">Order Items</Label>
-                    <div className="space-y-3 border rounded-lg p-3 bg-gray-50 max-h-48 overflow-y-auto">
-                      {(() => {
-                        const displayItems = selectedOrder.order_items_data || selectedOrder.items || [];
-                        if (displayItems.length === 0) {
-                          return <p className="text-gray-500 italic">No items found.</p>;
-                        }
-                        return displayItems.map((item: any, idx: number) => {
-                          const name = item.product?.name || item.name || "Unknown Product";
-                          const price = item.price || 0;
-                          const qty = item.quantity || 1;
-                          return (
-                            <div key={item.id || idx} className="flex justify-between items-start text-sm">
-                              <div className="flex gap-2">
-                                <span className="font-semibold w-6 text-center">{qty}x</span>
-                                <span className="text-gray-700">{name}</span>
-                              </div>
-                              <span className="font-medium">Rs. {(price * qty).toFixed(2)}</span>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <Label>Total Amount</Label>
-                      <p className="text-lg font-semibold">Rs. {selectedOrder.total_amount?.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <Label>Paid Amount</Label>
-                      <p className="text-lg font-semibold text-[#2D5F3F]">Rs. {selectedOrder.paid_amount?.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <Label>Pending Amount</Label>
-                      <p className="text-lg font-semibold text-[#C77D2E]">
-                        Rs. {(selectedOrder.total_amount - selectedOrder.paid_amount).toFixed(2)}
-                      </p>
+                    <Label className="mb-2 block">Status Update</Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={statusToUpdate}
+                        onValueChange={setStatusToUpdate}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="processing">Processing</SelectItem>
+                          <SelectItem value="shipped">Shipped</SelectItem>
+                          <SelectItem value="delivered">Delivered</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button onClick={() => updateOrderStatus(selectedOrder.id, statusToUpdate)}>
+                        Update
+                      </Button>
                     </div>
                   </div>
                 </div>
-              )}
-            </DialogContent>
-          </Dialog>
+                <div>
+                  <Label>Customer</Label>
+                  <p>{selectedOrder.users?.full_name || "N/A"}</p>
+                  <p className="text-sm text-[#6B6B6B]">{selectedOrder.users?.email}</p>
+                </div>
+                <div>
+                  <Label>Shipping Address</Label>
+                  {selectedOrder.shipping_address && (
+                    <div className="text-sm">
+                      <p>{selectedOrder.shipping_address.full_name}</p>
+                      <p>{selectedOrder.shipping_address.address_line1}</p>
+                      <p>{selectedOrder.shipping_address.city}, {selectedOrder.shipping_address.state}</p>
+                      <p>{selectedOrder.shipping_address.phone}</p>
+                    </div>
+                  )}
 
-          <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="font-serif text-2xl">Record Payment</DialogTitle>
-              </DialogHeader>
-              {selectedOrder && (
-                <div className="space-y-4">
+                </div>
+
+                {/* Order Items List */}
+                <div>
+                  <Label className="mb-2 block">Order Items</Label>
+                  <div className="space-y-3 border rounded-lg p-3 bg-gray-50 max-h-48 overflow-y-auto">
+                    {(() => {
+                      const displayItems = selectedOrder.order_items_data || selectedOrder.items || [];
+                      if (displayItems.length === 0) {
+                        return <p className="text-gray-500 italic">No items found.</p>;
+                      }
+                      return displayItems.map((item: any, idx: number) => {
+                        const name = item.product?.name || item.name || "Unknown Product";
+                        const price = item.price || 0;
+                        const qty = item.quantity || 1;
+                        return (
+                          <div key={item.id || idx} className="flex justify-between items-start text-sm">
+                            <div className="flex gap-2">
+                              <span className="font-semibold w-6 text-center">{qty}x</span>
+                              <span className="text-gray-700">{name}</span>
+                            </div>
+                            <span className="font-medium">Rs. {(price * qty).toFixed(2)}</span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4">
                   <div>
-                    <Label>Order Number</Label>
-                    <p className="font-mono">{selectedOrder.order_number}</p>
+                    <Label>Total Amount</Label>
+                    <p className="text-lg font-semibold">Rs. {selectedOrder.total_amount?.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <Label>Paid Amount</Label>
+                    <p className="text-lg font-semibold text-[#2D5F3F]">Rs. {selectedOrder.paid_amount?.toFixed(2)}</p>
                   </div>
                   <div>
                     <Label>Pending Amount</Label>
@@ -420,48 +370,13 @@ export default function OrdersManagementPage() {
                       Rs. {(selectedOrder.total_amount - selectedOrder.paid_amount).toFixed(2)}
                     </p>
                   </div>
-                  <div>
-                    <Label>Payment Amount</Label>
-                    <Input
-                      type="number"
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                      max={selectedOrder.total_amount - selectedOrder.paid_amount}
-                    />
-                  </div>
-                  <div>
-                    <Label>Payment Method</Label>
-                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                        <SelectItem value="upi">UPI</SelectItem>
-                        <SelectItem value="card">Card</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Notes (Optional)</Label>
-                    <Textarea
-                      value={paymentNotes}
-                      onChange={(e) => setPaymentNotes(e.target.value)}
-                      placeholder="Add any notes about this payment..."
-                    />
-                  </div>
-                  <Button
-                    onClick={recordPayment}
-                    className="w-full bg-[#D4AF37] hover:bg-[#C19B2E] text-white"
-                  >
-                    Record Payment
-                  </Button>
                 </div>
               </div>
             )}
           </DialogContent>
         </Dialog>
+
+
 
         {isPaymentOpen && selectedOrder && (
           <PaymentRecordModal

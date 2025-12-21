@@ -1,5 +1,4 @@
 import { createClient as createBrowserClient } from "@/supabase/client";
-import { createClient as createServerClient } from "@/supabase/server";
 
 export interface AuditLogEntry {
   action: string;
@@ -20,6 +19,8 @@ export async function logAudit(entry: AuditLogEntry, customSupabase?: any) {
   if (!supabase) {
     // Determine if we are on the server or browser
     if (typeof window === 'undefined') {
+      // Dynamically import server client to avoid bundling in client components
+      const { createClient: createServerClient } = await import("@/supabase/server");
       supabase = await createServerClient();
     } else {
       supabase = createBrowserClient();
