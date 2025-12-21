@@ -70,6 +70,9 @@ export default function OrderHistoryPage() {
                                 <div className="text-right flex items-center gap-4">
                                     <div className="text-right">
                                         <p className="font-bold">Rs. {Number(order.total_amount).toLocaleString()}</p>
+                                        {Number(order.pending_amount) > 0 && (
+                                            <p className="text-xs text-red-500 font-semibold">Pending: Rs. {Number(order.pending_amount).toLocaleString()}</p>
+                                        )}
                                         <Badge variant={order.payment_status === "paid" ? "default" : "destructive"} className="text-[10px]">
                                             {order.payment_status?.toUpperCase()}
                                         </Badge>

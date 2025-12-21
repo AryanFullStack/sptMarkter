@@ -209,6 +209,9 @@ export default function ParlorDashboard() {
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-[#1A1A1A]">Rs. {Number(order.total_amount || 0).toLocaleString()}</p>
+                          {order.payment_status !== 'paid' && Number(order.pending_amount) > 0 && (
+                            <p className="text-[10px] font-bold text-red-500">Pending: Rs. {Number(order.pending_amount).toLocaleString()}</p>
+                          )}
                           <Badge className={cn(
                             "text-[9px] h-5 px-2 font-bold uppercase tracking-tight",
                             order.payment_status === 'paid' ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-purple-50 text-purple-700 border-purple-100"

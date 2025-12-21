@@ -508,7 +508,7 @@ export async function loadAdminDashboardDataAction() {
         .from("users")
         .select(`
             id, role, approved, created_at, full_name, email, phone, is_active,
-            addresses:addresses(city, address_type, is_default)
+            addresses:addresses(address_line1, address_line2, city, state, postal_code, address_type, is_default)
         `)
         .neq("role", "admin")
   ]);
@@ -522,7 +522,14 @@ export async function loadAdminDashboardDataAction() {
       const primaryAddress = u.addresses?.find((a: any) => a.is_default) || u.addresses?.[0];
       return {
           ...u,
-          address: primaryAddress ? { city: primaryAddress.city, type: primaryAddress.address_type } : null
+          address: primaryAddress ? { 
+              address_line1: primaryAddress.address_line1,
+              address_line2: primaryAddress.address_line2,
+              city: primaryAddress.city,
+              state: primaryAddress.state,
+              postal_code: primaryAddress.postal_code,
+              type: primaryAddress.address_type 
+          } : null
       };
   });
 
@@ -586,7 +593,7 @@ export async function getPendingUsersAction() {
         .from("users")
         .select(`
             id, role, approved, created_at, full_name, email, phone, is_active,
-            addresses:addresses(city, address_type, is_default)
+            addresses:addresses(address_line1, address_line2, city, state, postal_code, address_type, is_default)
         `)
         .eq("approved", false)
         .neq("role", "admin")

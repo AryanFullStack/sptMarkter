@@ -105,6 +105,9 @@ CREATE TABLE IF NOT EXISTS public.orders (
   shipping_cost DECIMAL(10, 2) DEFAULT 0,
   tracking_number VARCHAR(255),
   
+  -- Brand Association
+  brand_id UUID REFERENCES public.brands(id),
+
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

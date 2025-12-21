@@ -23,6 +23,49 @@ export default function AuditLogsPage() {
         setLoading(false);
     }
 
+    // Helper function to format changes in a readable way
+    function formatChanges(changes: any, action: string): string {
+        if (!changes) return "-";
+
+        const details: string[] = [];
+
+        // Payment-related actions
+        if (action === "PAYMENT_RECORDED" || action === "PARTIAL_PAYMENT_RECORDED") {
+            if (changes.amount) details.push(`Amount: Rs. ${changes.amount}`);
+            if (changes.payment_method) details.push(`Method: ${changes.payment_method}`);
+            if (changes.newPaidAmount !== undefined) details.push(`Paid: Rs. ${changes.newPaidAmount}`);
+            if (changes.newPendingAmount !== undefined) details.push(`Pending: Rs. ${changes.newPendingAmount}`);
+            if (changes.notes) details.push(`Notes: ${changes.notes}`);
+        }
+        // Order status changes
+        else if (action === "ORDER_STATUS_UPDATED") {
+            if (changes.oldStatus) details.push(`From: ${changes.oldStatus}`);
+            if (changes.newStatus) details.push(`To: ${changes.newStatus}`);
+        }
+        // User changes
+        else if (action.includes("USER")) {
+            if (changes.role) details.push(`Role: ${changes.role}`);
+            if (changes.email) details.push(`Email: ${changes.email}`);
+            if (changes.full_name) details.push(`Name: ${changes.full_name}`);
+        }
+        // Credit changes
+        else if (action.includes("CREDIT")) {
+            if (changes.amount) details.push(`Amount: Rs. ${changes.amount}`);
+            if (changes.balance) details.push(`New Balance: Rs. ${changes.balance}`);
+            if (changes.type) details.push(`Type: ${changes.type}`);
+        }
+        // Generic fallback
+        else {
+            Object.keys(changes).forEach(key => {
+                if (key !== "order_id" && key !== "entity_id" && changes[key] !== null && changes[key] !== undefined) {
+                    details.push(`${key}: ${changes[key]}`);
+                }
+            });
+        }
+
+        return details.length > 0 ? details.join(" | ") : "-";
+    }
+
     const columns: Column<any>[] = [
         {
             key: "created_at",
@@ -56,11 +99,11 @@ export default function AuditLogsPage() {
         },
         {
             key: "changes",
-            header: "Changes",
+            header: "Details",
             render: (log) => (
-                <pre className="text-xs max-w-xs overflow-x-auto">
-                    {log.changes ? JSON.stringify(log.changes, null, 2) : "-"}
-                </pre>
+                <div className="text-xs max-w-md">
+                    <p className="text-[#1A1A1A]">{formatChanges(log.changes, log.action)}</p>
+                </div>
             )
         }
     ];

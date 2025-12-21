@@ -93,6 +93,37 @@ export default function UsersManagementPage() {
     }
   };
 
+  // Helper to format full address
+  const formatAddress = (user: any) => {
+    if (!user.address) return "No Address";
+
+    // Construct address parts
+    const parts = [
+      user.address.address_line1,
+      user.address.address_line2,
+      user.address.city,
+      user.address.state,
+      user.address.postal_code
+    ].filter(Boolean);
+
+    return parts.join(", ");
+  };
+
+  const getAddressTypeBadge = (type: string) => {
+    switch (type) {
+      case 'home':
+        return <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-[10px]"><span className="mr-1">🏠</span> Home</Badge>;
+      case 'office':
+        return <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 text-[10px]"><span className="mr-1">🏢</span> Office</Badge>;
+      case 'shop':
+        return <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200 text-[10px]"><span className="mr-1">🏪</span> Shop</Badge>;
+      case 'beauty_parlor':
+        return <Badge variant="outline" className="bg-pink-50 text-pink-600 border-pink-200 text-[10px]"><span className="mr-1">💄</span> Beauty Parlor</Badge>;
+      default:
+        return <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200 text-[10px]">{type || 'Unknown'}</Badge>;
+    }
+  };
+
   return (
     <div className="space-y-8 pb-12">
       <div>
@@ -137,8 +168,8 @@ export default function UsersManagementPage() {
           <Table>
             <TableHeader className="bg-[#FDFCF9]">
               <TableRow>
-                <TableHead className="w-[300px]">User Profile</TableHead>
-                <TableHead>Contact & Location</TableHead>
+                <TableHead className="w-[250px]">User Profile</TableHead>
+                <TableHead className="w-[300px]">Contact & Location</TableHead>
                 <TableHead>Role Management</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -156,83 +187,111 @@ export default function UsersManagementPage() {
                 </TableRow>
               ) : filteredUsers.map((user) => (
                 <TableRow key={user.id} className="hover:bg-[#FDFCF9]/50 transition-colors">
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-lg text-[#1A1A1A]">{user.full_name || "N/A"}</span>
-                      <span className="text-[10px] text-[#6B6B6B] font-mono lowercase">{user.id}</span>
-                      <span className="text-[10px] text-[#6B6B6B] mt-1 italic">Joined {new Date(user.created_at).toLocaleDateString()}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1.5 grayscale-[0.5]">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="h-3.5 w-3.5 text-[#D4AF37]" />
-                        {user.email}
+                  <TableCell className="align-top py-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-semibold text-base text-[#1A1A1A]">{user.full_name || "N/A"}</span>
+                      <span className="text-[10px] text-[#6B6B6B] font-mono lowercase bg-gray-50 px-1 py-0.5 rounded w-fit" title="User ID">
+                        {user.id}
+                      </span>
+                      <div className="flex items-center gap-1.5 mt-1 text-xs text-[#6B6B6B]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Joined {new Date(user.created_at).toLocaleDateString()}
                       </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="align-top py-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-[#1A1A1A]">
+                        <Mail className="h-3.5 w-3.5 text-[#D4AF37] shrink-0" />
+                        <span className="truncate max-w-[200px]" title={user.email}>{user.email}</span>
+                      </div>
+
                       {user.phone && (
-                        <div className="flex items-center gap-2 text-xs text-[#6B6B6B]">
-                          <Phone className="h-3 w-3" />
-                          {user.phone}
+                        <div className="flex items-center gap-2 text-sm text-[#6B6B6B]">
+                          <Phone className="h-3.5 w-3.5 text-[#D4AF37] shrink-0" />
+                          <span>{user.phone}</span>
                         </div>
                       )}
-                      {user.address && (
-                        <div className="flex items-center gap-2 text-xs text-[#6B6B6B]">
-                          <MapPin className="h-3 w-3" />
-                          {user.address.city || "No City"}
+
+                      {user.address ? (
+                        <div className="flex flex-col gap-1.5 mt-2 bg-slate-50 p-2 rounded-md border border-slate-100">
+                          <div className="flex items-start gap-2">
+                            <MapPin className="h-3.5 w-3.5 text-[#D4AF37] mt-0.5 shrink-0" />
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs text-[#1A1A1A] font-medium leading-relaxed">
+                                {formatAddress(user)}
+                              </span>
+                              {user.address.type && (
+                                <div className="mt-0.5">
+                                  {getAddressTypeBadge(user.address.type)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-[#6B6B6B] italic pl-1">
+                          <MapPin className="h-3 w-3 opacity-50" />
+                          No address info
                         </div>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-2">
-                      <Badge className={`${getRoleBadgeColor(user.role)} text-[10px] uppercase w-fit`}>
+                  <TableCell className="align-top py-4">
+                    <div className="flex flex-col gap-3">
+                      <Badge className={`${getRoleBadgeColor(user.role)} text-[10px] uppercase w-fit shadow-sm`}>
                         {user.role.replace("_", " ")}
                       </Badge>
-                      <Select
-                        defaultValue={user.role}
-                        onValueChange={(val) => handleUpdateRole(user.id, val)}
-                      >
-                        <SelectTrigger className="h-7 text-[10px] border-dashed">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="local_customer">Customer</SelectItem>
-                          <SelectItem value="retailer">Retailer</SelectItem>
-                          <SelectItem value="beauty_parlor">Beauty Parlor</SelectItem>
-                          <SelectItem value="salesman">Salesman</SelectItem>
-                          <SelectItem value="sub_admin">Sub Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-[10px] text-[#6B6B6B] font-medium">CHANGE ROLE</Label>
+                        <Select
+                          defaultValue={user.role}
+                          onValueChange={(val) => handleUpdateRole(user.id, val)}
+                        >
+                          <SelectTrigger className="h-8 text-xs border-dashed bg-white/50 w-[140px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="local_customer">Customer</SelectItem>
+                            <SelectItem value="retailer">Retailer</SelectItem>
+                            <SelectItem value="beauty_parlor">Beauty Parlor</SelectItem>
+                            <SelectItem value="salesman">Salesman</SelectItem>
+                            <SelectItem value="sub_admin">Sub Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="align-top py-4">
                     <div className="flex flex-col gap-2">
                       {user.is_active !== false ? (
-                        <Badge className="bg-[#2D5F3F] text-white text-[10px] uppercase w-fit flex items-center gap-1">
+                        <Badge className="bg-[#2D5F3F] text-white text-[10px] uppercase w-fit flex items-center gap-1 shadow-sm">
                           <ShieldCheck className="h-3 w-3" /> Active
                         </Badge>
                       ) : (
-                        <Badge className="bg-[#8B3A3A] text-white text-[10px] uppercase w-fit flex items-center gap-1">
+                        <Badge className="bg-[#8B3A3A] text-white text-[10px] uppercase w-fit flex items-center gap-1 shadow-sm">
                           <ShieldAlert className="h-3 w-3" /> Suspended
                         </Badge>
                       )}
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 text-[10px] text-muted-foreground underline p-0 justify-start"
+                        className={`h-6 text-[10px] underline p-0 justify-start w-fit ${user.is_active !== false ? "text-red-500 hover:text-red-700" : "text-green-600 hover:text-green-800"
+                          }`}
                         onClick={() => handleToggleStatus(user)}
                       >
                         {user.is_active !== false ? "Suspend Account" : "Re-activate"}
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right align-top py-4">
                     <div className="flex justify-end gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white"
+                        className="h-8 border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition-all shadow-sm"
                         onClick={() => router.push(`/admin/orders?user=${user.id}`)}
+                        title="View user activity and orders"
                       >
                         <Eye className="h-4 w-4 mr-1" />
                         Activity
@@ -240,9 +299,9 @@ export default function UsersManagementPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-8 text-[#8B3A3A] hover:bg-red-50"
+                        className="h-8 text-[#8B3A3A] hover:bg-red-50 hover:text-red-700 transition-all"
                         onClick={async () => {
-                          if (confirm("Delete this user?")) {
+                          if (confirm("Are you sure you want to permanently delete this user? This action cannot be undone.")) {
                             try {
                               await deleteUserAction(user.id);
                               notify.success("User Deleted", "The user record has been removed.");
@@ -252,6 +311,7 @@ export default function UsersManagementPage() {
                             }
                           }
                         }}
+                        title="Delete User"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
