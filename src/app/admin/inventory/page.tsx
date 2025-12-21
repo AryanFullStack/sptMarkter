@@ -12,6 +12,7 @@ import { ExportButton } from "@/components/shared/export-button";
 import { adjustStock } from "@/app/admin/actions";
 import { Package, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
 import { formatDate } from "@/utils/export-utils";
+import { notify } from "@/lib/notifications";
 
 interface Product {
     id: string;
@@ -48,7 +49,11 @@ export default function InventoryPage() {
                 .limit(50)
         ]);
 
-        setProducts(productsData.data || []);
+        const products = (productsData.data || []).map((p: any) => ({
+            ...p,
+            brand: p.brand?.[0] || { name: "N/A" }
+        }));
+        setProducts(products);
         setInventoryLogs(logsData.data || []);
         setLoading(false);
     }
@@ -58,12 +63,13 @@ export default function InventoryPage() {
 
         try {
             await adjustStock(adjustingProduct.id, adjustment.quantity, adjustment.reason);
+            notify.success("Stock Adjusted", `Inventory for ${adjustingProduct.name} has been updated.`);
             setAdjustingProduct(null);
             setAdjustment({ quantity: 0, reason: "" });
             loadData();
         } catch (error) {
             console.error("Error adjusting stock:", error);
-            alert("Failed to adjust stock");
+            notify.error("Error", "Failed to adjust stock. Please try again.");
         }
     };
 

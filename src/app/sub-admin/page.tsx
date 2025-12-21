@@ -31,7 +31,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { approveUserAction, deleteUserAction } from "@/app/admin/actions";
 import { Input } from "@/components/ui/input";
 import { PaymentRequestManagement } from "@/components/shared/payment-request-management";
@@ -50,7 +50,6 @@ export default function SubAdminPage() {
     const [pendingUsers, setPendingUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
-    const { toast } = useToast();
 
     useEffect(() => {
         loadDashboardData();
@@ -98,7 +97,7 @@ export default function SubAdminPage() {
             setPendingUsers(pendingUsersData || []);
         } catch (error) {
             console.error("Error loading dashboard data:", error);
-            toast({ title: "Sync Error", description: "Failed to load operational data", variant: "destructive" });
+            notify.error("Sync Error", "Failed to load operational data");
         }
         setLoading(false);
     }
@@ -112,10 +111,10 @@ export default function SubAdminPage() {
 
             if (error) throw error;
 
-            toast({ title: "Authorization Granted", description: "User credentials verified and active." });
+            notify.success("Authorization Granted", "User credentials verified and active.");
             loadDashboardData();
         } catch (error) {
-            toast({ title: "Verification Failed", description: "Could not approve user registry entry.", variant: "destructive" });
+            notify.error("Verification Failed", "Could not approve user registry entry.");
         }
     };
 
@@ -123,10 +122,10 @@ export default function SubAdminPage() {
         if (!confirm("Are you sure?")) return;
         try {
             await deleteUserAction(userId);
-            toast({ title: "Registry Updated", description: "Application rejected." });
+            notify.success("Registry Updated", "Application rejected.");
             loadDashboardData();
         } catch (error: any) {
-            toast({ title: "Action Failed", description: error.message, variant: "destructive" });
+            notify.error("Action Failed", error.message);
         }
     };
 
@@ -145,10 +144,10 @@ export default function SubAdminPage() {
 
             if (error) throw error;
 
-            toast({ title: "Treasury Updated", description: "Order reconciliation complete." });
+            notify.success("Treasury Updated", "Order reconciliation complete.");
             loadDashboardData();
         } catch (error) {
-            toast({ title: "Transaction Error", description: "Failed to update payment registry.", variant: "destructive" });
+            notify.error("Transaction Error", "Failed to update payment registry.");
         }
     };
 

@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AddressForm } from "@/components/checkout/address-form";
 import { Check, MapPin, CreditCard, Package } from "lucide-react";
 import Image from "next/image";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { placeOrderAction } from "@/app/actions";
 import { validateCheckoutPendingLimit } from "@/app/actions/pending-limit-actions";
 
@@ -99,8 +99,6 @@ export default function CheckoutPage() {
     }
   }, [items]);
 
-  const { toast } = useToast();
-
   const handleAddAddress = async (addressData: any) => {
     setSavingAddress(true);
     try {
@@ -129,21 +127,14 @@ export default function CheckoutPage() {
       setSelectedAddress(data.id);
       setShowAddressForm(false);
 
-      toast({
-        title: "Address Saved",
-        description: "Your new address has been added successfully.",
-      });
+      notify.success("Address Saved", "Your new address has been added successfully.");
     } catch (error: any) {
       console.error("Error saving address:", error);
       let errorMessage = "Failed to save address.";
       if (error?.message) errorMessage = error.message;
       if (error?.hint) errorMessage += ` - ${error.hint}`;
 
-      toast({
-        title: "Error saving address",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      notify.error("Error saving address", errorMessage);
     } finally {
       setSavingAddress(false);
     }
@@ -151,7 +142,7 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!selectedAddress) {
-      alert("Please select a shipping address");
+      notify.error("Selection Required", "Please select a shipping address");
       return;
     }
 
@@ -161,7 +152,7 @@ export default function CheckoutPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        alert("Please log in to place an order");
+        notify.error("Login Required", "Please log in to place an order");
         setLoading(false);
         return;
       }
@@ -174,7 +165,7 @@ export default function CheckoutPage() {
       if (pendingAmount > 0 && (userRole === 'retailer' || userRole === 'beauty_parlor')) {
         const validation = await validateCheckoutPendingLimit(user.id, total, paidAmount);
         if (!validation.valid) {
-          alert(validation.error || "Pending amount limit exceeded. Please pay the full amount.");
+          notify.error("Limit Exceeded", validation.error || "Pending amount limit exceeded. Please pay the full amount.");
           setLoading(false);
           return;
         }
@@ -214,7 +205,7 @@ export default function CheckoutPage() {
 
       if (result.error) {
         console.error("=== Order Creation Error ===", result.error);
-        alert(`Failed to place order: ${result.error}`);
+        notify.error("Order Failed", `Failed to place order: ${result.error}`);
         setLoading(false);
         return;
       }
@@ -230,7 +221,7 @@ export default function CheckoutPage() {
       router.push(`/orders/${orderId}?success=true`);
     } catch (err: any) {
       console.error("=== Unexpected Error in Order Placement ===", err);
-      alert(`An error occurred: ${err.message || 'Please try again'}`);
+      notify.error("Unexpected Error", `An error occurred: ${err.message || 'Please try again'}`);
       setLoading(false);
     }
   };

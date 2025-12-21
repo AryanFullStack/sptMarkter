@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { Loader2, UserPlus, Tag, Building2, CheckCircle, XCircle, Pencil, TrendingUp, ShoppingBag } from "lucide-react";
 import { getAllSalesmen, assignSalesmanToBrands, updateSalesman, createSalesman, getAllBrands } from "@/app/admin/actions";
 
@@ -49,8 +49,6 @@ export function SalesmanManagement() {
     const [creatingUser, setCreatingUser] = useState(false);
     const [updatingUser, setUpdatingUser] = useState(false);
     const [assigningBrands, setAssigningBrands] = useState(false);
-
-    const { toast } = useToast();
 
     // New user form state
     const [newUser, setNewUser] = useState({
@@ -95,11 +93,7 @@ export function SalesmanManagement() {
                 errorMessage = "Database tables not ready. Please ensure all migrations are run.";
             }
 
-            toast({
-                title: "Error",
-                description: errorMessage,
-                variant: "destructive",
-            });
+            notify.error("Error", errorMessage);
         } finally {
             setLoading(false);
         }
@@ -118,9 +112,7 @@ export function SalesmanManagement() {
             return data || [];
         } catch (error: any) {
             console.error("Error fetching brands:", error);
-            if (typeof window !== 'undefined') {
-                window.alert(`Error fetching brands: ${error.message}`);
-            }
+            notify.error("Error", `Error fetching brands: ${error.message}`);
             return [];
         }
     }
@@ -131,13 +123,7 @@ export function SalesmanManagement() {
         // Validation with explicit logging
         if (!newUser.email || !newUser.password || !newUser.full_name) {
             console.log("Validation failed:", newUser);
-            toast({
-                title: "Validation Error",
-                description: "Please fill in all required fields",
-                variant: "destructive",
-            });
-            // Fallback alert if toast fails
-            if (typeof window !== 'undefined') window.alert("Please fill in all required fields");
+            notify.error("Validation Error", "Please fill in all required fields");
             return;
         }
 
@@ -150,14 +136,7 @@ export function SalesmanManagement() {
 
             console.log("Salesman created successfully!");
 
-            // Explicit alert for success to ensure feedback
-            if (typeof window !== 'undefined') window.alert(`Success! Salesman ${newUser.full_name} created.`);
-
-            toast({
-                title: "Salesman Created",
-                description: `${newUser.full_name} has been created successfully`,
-                variant: 'default'
-            });
+            notify.success("Salesman Created", `${newUser.full_name} has been created successfully`);
 
             // Reset form and reload data
             setNewUser({ email: "", password: "", full_name: "", phone: "" });
@@ -172,14 +151,7 @@ export function SalesmanManagement() {
                 errorMessage = "Database tables not ready! Run SQL migrations in Supabase.";
             }
 
-            // Force alert on error
-            if (typeof window !== 'undefined') window.alert(`Error: ${errorMessage}`);
-
-            toast({
-                title: "Creation Failed",
-                description: errorMessage,
-                variant: "destructive",
-            });
+            notify.error("Creation Failed", errorMessage);
         } finally {
             console.log("Creation attempt finished");
             setCreatingUser(false);
@@ -198,21 +170,14 @@ export function SalesmanManagement() {
                 password: editUser.password || undefined,
             });
 
-            toast({
-                title: "Salesman Updated",
-                description: "Salesman details updated successfully",
-            });
+            notify.success("Salesman Updated", "Salesman details updated successfully");
 
             setShowEditDialog(false);
             setSelectedSalesman(null);
             loadData();
         } catch (error: any) {
             console.error("Error updating salesman:", error);
-            toast({
-                title: "Update Failed",
-                description: error.message || "Failed to update salesman",
-                variant: "destructive",
-            });
+            notify.error("Update Failed", error.message || "Failed to update salesman");
         } finally {
             setUpdatingUser(false);
         }
@@ -226,10 +191,7 @@ export function SalesmanManagement() {
         try {
             await assignSalesmanToBrands(selectedSalesman.id, selectedBrandIds);
 
-            toast({
-                title: "Brands Assigned",
-                description: `${selectedBrandIds.length} brand(s) assigned to ${selectedSalesman.full_name}`,
-            });
+            notify.success("Brands Assigned", `${selectedBrandIds.length} brand(s) assigned to ${selectedSalesman.full_name}`);
 
             setShowBrandDialog(false);
             setSelectedSalesman(null);
@@ -237,11 +199,7 @@ export function SalesmanManagement() {
             loadData();
         } catch (error: any) {
             console.error("Error assigning brands:", error);
-            toast({
-                title: "Assignment Failed",
-                description: error.message || "Failed to assign brands",
-                variant: "destructive",
-            });
+            notify.error("Assignment Failed", error.message || "Failed to assign brands");
         } finally {
             setAssigningBrands(false);
         }

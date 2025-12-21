@@ -11,7 +11,7 @@ import { ProfileForm } from "@/components/dashboards/profile-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getRetailerDashboardData, requestPayment } from "@/app/actions/retailer-actions";
 import { getPendingLimitInfo } from "@/app/actions/pending-limit-actions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { FinancialSummaryCard } from "@/components/shared/financial-summary-card";
 import { PaymentTimeline } from "@/components/shared/payment-timeline";
 import { PendingLimitWarning } from "@/components/shared/pending-limit-warning";
@@ -29,7 +29,6 @@ export default function ParlorDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
 
   const supabase = createClient();
-  const { toast } = useToast();
 
   useEffect(() => {
     loadData();
@@ -66,7 +65,7 @@ export default function ParlorDashboard() {
       }
     } catch (e) {
       console.error(e);
-      toast({ title: "Error", description: "Failed to load dashboard data", variant: "destructive" });
+      notify.error("Error", "Failed to load dashboard data");
     }
     setLoading(false);
   }
@@ -81,10 +80,7 @@ export default function ParlorDashboard() {
 
   const handlePaymentRecorded = () => {
     loadData(); // Reload dashboard data
-    toast({
-      title: "Payment Requested",
-      description: "Your payment request has been sent for approval.",
-    });
+    notify.success("Payment Requested", "Your payment request has been sent for approval.");
   };
 
   if (loading) {

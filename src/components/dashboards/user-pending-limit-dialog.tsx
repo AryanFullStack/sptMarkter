@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
 import { getPendingLimitInfo, updatePendingLimit } from "@/app/actions/pending-limit-actions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 
 interface UserPendingLimitDialogProps {
     userId: string;
@@ -28,7 +28,6 @@ export function UserPendingLimitDialog({ userId, userName, isOpen, onClose }: Us
     const [loading, setLoading] = useState(true);
     const [newLimit, setNewLimit] = useState("");
     const [submitting, setSubmitting] = useState(false);
-    const { toast } = useToast();
 
     useEffect(() => {
         if (isOpen && userId) {
@@ -41,14 +40,14 @@ export function UserPendingLimitDialog({ userId, userName, isOpen, onClose }: Us
         try {
             const data = await getPendingLimitInfo(userId);
             if (data.error) {
-                toast({ title: "Error", description: data.error, variant: "destructive" });
+                notify.error("Error", data.error);
             } else {
                 setPendingInfo(data);
                 setNewLimit(data.pendingAmountLimit?.toString() || "0");
             }
         } catch (e) {
             console.error(e);
-            toast({ title: "Error", description: "Failed to load pending limit data", variant: "destructive" });
+            notify.error("Error", "Failed to load pending limit data");
         }
         setLoading(false);
     }
@@ -56,20 +55,20 @@ export function UserPendingLimitDialog({ userId, userName, isOpen, onClose }: Us
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (!newLimit || isNaN(Number(newLimit)) || Number(newLimit) < 0) {
-            toast({ title: "Invalid Limit", description: "Please enter a valid positive number", variant: "destructive" });
+            notify.error("Invalid Limit", "Please enter a valid positive number");
             return;
         }
         setSubmitting(true);
         try {
             const result = await updatePendingLimit(userId, Number(newLimit));
             if (result.error) {
-                toast({ title: "Error", description: result.error, variant: "destructive" });
+                notify.error("Error", result.error);
             } else {
-                toast({ title: "Success", description: "Pending amount limit updated successfully" });
+                notify.success("Success", "Pending amount limit updated successfully");
                 loadData(); // Reload data
             }
         } catch (e: any) {
-            toast({ title: "Error", description: e.message, variant: "destructive" });
+            notify.error("Error", e.message);
         }
         setSubmitting(false);
     }

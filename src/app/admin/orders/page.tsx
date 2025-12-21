@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Eye, DollarSign, User } from "lucide-react";
 import { loadAdminOrdersAction, updateOrderStatusAction } from "@/app/admin/actions";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 
 export default function OrdersManagementPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -33,7 +33,6 @@ export default function OrdersManagementPage() {
   const [statusToUpdate, setStatusToUpdate] = useState("");
   const supabase = createClient();
   const router = useRouter();
-  const { toast } = useToast();
 
   useEffect(() => {
     checkAdmin();
@@ -105,10 +104,10 @@ export default function OrdersManagementPage() {
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(prev => ({ ...prev, status: newStatus }));
       }
-      toast({ title: "Status Updated", description: `Order status changed to ${newStatus}` });
+      notify.success("Status Updated", `Order status changed to ${newStatus}`);
     } catch (error) {
       console.error("Update failed", error);
-      toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
+      notify.error("Error", "Failed to update status");
     }
   }
 
@@ -134,6 +133,7 @@ export default function OrdersManagementPage() {
     setIsPaymentOpen(false);
     setPaymentAmount(0);
     setPaymentNotes("");
+    notify.success("Payment Recorded", `Payment of Rs. ${paymentAmount} recorded successfully.`);
     loadOrders();
   }
 

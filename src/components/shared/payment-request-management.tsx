@@ -12,7 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { Check, Clock, DollarSign, User, Store, Tag, Loader2 } from "lucide-react";
 import { getPaymentRequests, approvePaymentRequest } from "@/app/actions/salesman-actions";
 
@@ -24,7 +24,6 @@ export function PaymentRequestManagement({ salesmanId }: PaymentRequestManagemen
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const { toast } = useToast();
 
     useEffect(() => {
         loadRequests();
@@ -37,7 +36,7 @@ export function PaymentRequestManagement({ salesmanId }: PaymentRequestManagemen
             if (res.error) throw new Error(res.error);
             setRequests(res.requests || []);
         } catch (e: any) {
-            toast({ title: "Error", description: e.message, variant: "destructive" });
+            notify.error("Error", e.message);
         } finally {
             setLoading(false);
         }
@@ -48,10 +47,10 @@ export function PaymentRequestManagement({ salesmanId }: PaymentRequestManagemen
         try {
             const res = await approvePaymentRequest(id);
             if (res.error) throw new Error(res.error);
-            toast({ title: "Success", description: "Payment approved and recorded." });
+            notify.success("Success", "Payment approved and recorded.");
             loadRequests();
         } catch (e: any) {
-            toast({ title: "Error", description: e.message, variant: "destructive" });
+            notify.error("Error", e.message);
         } finally {
             setActionLoading(null);
         }

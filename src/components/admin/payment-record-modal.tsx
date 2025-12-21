@@ -24,6 +24,7 @@ import { recordPayment } from "@/app/admin/actions";
 import { compressAndUploadImage } from "@/utils/image-compression";
 import { formatCurrency } from "@/utils/export-utils";
 import { Loader2 } from "lucide-react";
+import { notify } from "@/lib/notifications";
 
 interface Order {
     id: string;
@@ -60,7 +61,7 @@ export function PaymentRecordModal({ order, onClose, onSuccess }: PaymentRecordM
             setFormData({ ...formData, proof_url: url });
         } catch (error) {
             console.error("Error uploading proof:", error);
-            alert("Failed to upload payment proof");
+            notify.error("Upload Failed", "Failed to upload payment proof. Please try again.");
         } finally {
             setUploadingProof(false);
         }
@@ -82,7 +83,7 @@ export function PaymentRecordModal({ order, onClose, onSuccess }: PaymentRecordM
             onSuccess();
         } catch (error: any) {
             console.error("Error recording payment:", error);
-            alert(error.message || "Failed to record payment");
+            notify.error("Error", error.message || "Failed to record payment");
         } finally {
             setLoading(false);
         }

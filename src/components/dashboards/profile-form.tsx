@@ -5,7 +5,7 @@ import { createClient } from "@/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { User, Phone, Mail, Save, MapPin, Plus, Trash2, Shield, Lock, Eye, EyeOff, KeyRound } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AddressForm } from "@/components/checkout/address-form";
@@ -49,8 +49,6 @@ export function ProfileForm({ user, initialData }: ProfileFormProps) {
     const [showAddressForm, setShowAddressForm] = useState(false);
     const [loadingAddresses, setLoadingAddresses] = useState(true);
     const [savingAddress, setSavingAddress] = useState(false);
-
-    const { toast } = useToast();
     const supabase = createClient();
 
     useEffect(() => {
@@ -89,17 +87,10 @@ export function ProfileForm({ user, initialData }: ProfileFormProps) {
 
             if (error) throw error;
 
-            toast({
-                title: "Profile Synchronized",
-                description: "Your professional credentials have been successfully updated in our registry.",
-            });
+            notify.success("Profile Synchronized", "Your professional credentials have been successfully updated in our registry.");
         } catch (error: any) {
             console.error("Error updating profile:", error);
-            toast({
-                title: "Synchronization Failed",
-                description: error.message || "Unable to update profile at this time.",
-                variant: "destructive",
-            });
+            notify.error("Synchronization Failed", error.message || "Unable to update profile at this time.");
         } finally {
             setLoading(false);
         }
@@ -109,20 +100,12 @@ export function ProfileForm({ user, initialData }: ProfileFormProps) {
         e.preventDefault();
 
         if (passwordData.newPassword !== passwordData.confirmPassword) {
-            toast({
-                title: "Mismatch Detected",
-                description: "The new password and confirmation do not align.",
-                variant: "destructive",
-            });
+            notify.error("Mismatch Detected", "The new password and confirmation do not align.");
             return;
         }
 
         if (passwordData.newPassword.length < 6) {
-            toast({
-                title: "Insufficient Strength",
-                description: "Security protocol requires a minimum of 6 characters.",
-                variant: "destructive",
-            });
+            notify.error("Insufficient Strength", "Security protocol requires a minimum of 6 characters.");
             return;
         }
 
@@ -136,10 +119,7 @@ export function ProfileForm({ user, initialData }: ProfileFormProps) {
 
             if (error) throw error;
 
-            toast({
-                title: "Access Updated",
-                description: "Your security credentials have been successfully rotated.",
-            });
+            notify.success("Access Updated", "Your security credentials have been successfully rotated.");
 
             setPasswordData({
                 oldPassword: "",
@@ -148,11 +128,7 @@ export function ProfileForm({ user, initialData }: ProfileFormProps) {
             });
         } catch (error: any) {
             console.error("Error updating password:", error);
-            toast({
-                title: "Security Update Failed",
-                description: error.message || "Unable to rotate access credentials.",
-                variant: "destructive",
-            });
+            notify.error("Security Update Failed", error.message || "Unable to rotate access credentials.");
         } finally {
             setLoadingPassword(false);
         }
@@ -188,19 +164,12 @@ export function ProfileForm({ user, initialData }: ProfileFormProps) {
             });
             setShowAddressForm(false);
 
-            toast({
-                title: "Registry Updated",
-                description: "New operational address has been successfully logged.",
-            });
+            notify.success("Registry Updated", "New operational address has been successfully logged.");
 
             fetchAddresses();
         } catch (error: any) {
             console.error("Error adding address:", error);
-            toast({
-                title: "Registry Error",
-                description: error.message || "Failed to log new address.",
-                variant: "destructive",
-            });
+            notify.error("Registry Error", error.message || "Failed to log new address.");
         } finally {
             setSavingAddress(false);
         }
@@ -216,17 +185,10 @@ export function ProfileForm({ user, initialData }: ProfileFormProps) {
             if (error) throw error;
 
             setAddresses(addresses.filter(a => a.id !== id));
-            toast({
-                title: "Address Purged",
-                description: "The specified location has been removed from the registry.",
-            });
+            notify.success("Address Purged", "The specified location has been removed from the registry.");
         } catch (error: any) {
             console.error("Error deleting address:", error);
-            toast({
-                title: "Purge Failed",
-                description: error.message || "Failed to remove the address.",
-                variant: "destructive",
-            });
+            notify.error("Purge Failed", error.message || "Failed to remove the address.");
         }
     };
 

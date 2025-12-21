@@ -91,18 +91,22 @@ export async function updateUserRole(userId: string, role: string) {
 }
 
 export async function suspendUser(userId: string, suspended: boolean) {
-  const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  await checkPermissions(['admin', 'sub_admin']);
 
-  // Note: You may need to add a 'suspended' or 'is_active' column to users table
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
   const { error } = await supabase
     .from("users")
     .update({ is_active: !suspended })
     .eq("id", userId);
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes("is_active")) {
+        throw new Error("Missing 'is_active' column in database. Please run the fix script in d:/smartmarketer/sptMarkter/database/fix_is_active_column.sql");
+    }
+    throw error;
+  }
 
   await logAudit({
     action: suspended ? "USER_SUSPENDED" : "USER_ACTIVATED",
@@ -111,6 +115,7 @@ export async function suspendUser(userId: string, suspended: boolean) {
     changes: { is_active: !suspended },
   });
 
+  revalidatePath("/admin");
   revalidatePath("/admin/users");
   return { success: true };
 }
@@ -463,7 +468,7 @@ export async function loadAdminDashboardDataAction() {
      supabase
         .from("users")
         .select(`
-            id, role, approved, created_at, full_name, email, phone,
+            id, role, approved, created_at, full_name, email, phone, is_active,
             addresses:addresses(city, address_type, is_default)
         `)
         .neq("role", "admin")
@@ -541,10 +546,10 @@ export async function getPendingUsersAction() {
     const { data: users, error } = await supabase
         .from("users")
         .select(`
-            id, role, approved, created_at, full_name, email, phone,
+            id, role, approved, created_at, full_name, email, phone, is_active,
             addresses:addresses(city, address_type, is_default)
         `)
-        .is("approved", null)
+        .eq("approved", false)
         .neq("role", "admin")
         .order("created_at", { ascending: false });
 
@@ -575,10 +580,26 @@ export async function deleteUserAction(userId: string) {
     if (!supabase) throw new Error("Admin client unavailable");
 
     // Delete from Auth (References public.users via Cascade)
-    const { error } = await supabase.auth.admin.deleteUser(userId);
-    if (error) {
-        console.error("[deleteUserAction] Error:", error);
-        throw new Error(error.message);
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+    
+    if (authError) {
+        // If user already gone from Auth, we still want to try deleting from public.users
+        // to clean up any orphan records.
+        if ((authError as any).status === 404 || authError.message?.toLowerCase().includes("not found")) {
+            console.warn("[deleteUserAction] User not found in Auth, attempting to clean up public.users record anyway.");
+            const { error: dbError } = await supabase.from("users").delete().eq("id", userId);
+            if (dbError) {
+                console.error("[deleteUserAction] Failed to clean up orphan DB record:", dbError);
+                throw new Error("Failed to delete user record from database.");
+            }
+        } else {
+            console.error("[deleteUserAction] Auth Error:", authError);
+            throw new Error(authError.message);
+        }
+    } else {
+        // Auth deletion successful, Cascade should handle public.users, but let's be sure
+        // Just in case cascade isn't working as expected or we want to be explicit
+        await supabase.from("users").delete().eq("id", userId);
     }
     
     console.log("[deleteUserAction] Success");
@@ -615,7 +636,7 @@ export async function approveUserAction(userId: string) {
 
     const { error } = await supabase
         .from("users")
-        .update({ approved: new Date().toISOString() })
+        .update({ approved: true })
         .eq("id", userId);
 
     if (error) {

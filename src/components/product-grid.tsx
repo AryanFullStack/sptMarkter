@@ -3,7 +3,7 @@
 import { ProductCard } from "@/components/product-card";
 import { useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
-import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/supabase/client";
 
@@ -14,16 +14,12 @@ interface ProductGridProps {
 export function ProductGrid({ products }: ProductGridProps) {
     const { addToCart } = useCart();
     const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
-    const { toast } = useToast();
     const router = useRouter();
     const supabase = createClient();
 
     const handleAddToCart = (product: any) => {
         addToCart(product, 1);
-        toast({
-            title: "Added to cart!",
-            description: `${product.name} added to your cart.`,
-        });
+        notify.success("Added to cart!", `${product.name} added to your cart.`);
     };
 
     const handleToggleWishlist = async (product: any) => {
@@ -31,27 +27,17 @@ export function ProductGrid({ products }: ProductGridProps) {
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) {
-            toast({
-                title: "Login required",
-                description: "Please login to add items to wishlist.",
-                variant: "destructive",
-            });
+            notify.error("Login required", "Please login to add items to wishlist.");
             router.push("/sign-in");
             return;
         }
 
         if (isInWishlist(product.id)) {
             removeFromWishlist(product.id);
-            toast({
-                title: "Removed from wishlist",
-                description: `${product.name} removed from your wishlist.`,
-            });
+            notify.success("Removed from wishlist", `${product.name} removed from your wishlist.`);
         } else {
             addToWishlist(product);
-            toast({
-                title: "Added to wishlist!",
-                description: `${product.name} added to your wishlist.`,
-            });
+            notify.success("Added to wishlist!", `${product.name} added to your wishlist.`);
         }
     };
 
