@@ -74,12 +74,17 @@ export default function AdminDashboard() {
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [salesData, setSalesData] = useState<any[]>([]);
+  const [transactionsByStatus, setTransactionsByStatus] = useState<any[]>([]);
+  const [topCustomers, setTopCustomers] = useState<any[]>([]);
+  const [revenueMetrics, setRevenueMetrics] = useState<any>({ growth: 0, avgOrderValue: 0, currentMonth: 0, previousMonth: 0 });
   const [pendingPaymentOrders, setPendingPaymentOrders] = useState<any[]>([]);
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  const [allOrders, setAllOrders] = useState<any[]>([]);
 
   const supabase = createClient();
 
@@ -94,10 +99,12 @@ export default function AdminDashboard() {
       setStats(data.stats);
       setRecentOrders(data.recentOrders || []);
       setLowStockProducts(data.lowStockProducts || []);
-      setSalesData(data.salesData || []);
+      setAllOrders(data.allOrders || []);
       setPendingUsers(data.pendingUsers || []);
       setAllUsers(data.allUsers || []);
       setPendingPaymentOrders(data.pendingPaymentOrders || []);
+      // Initial data will be set by filterDataByPeriod
+      filterDataByPeriod(data.allOrders || [], timePeriod);
     } catch (e) {
       console.error("Dashboard Load Error", e);
       notify.error("Error", "Failed to load dashboard data");
@@ -124,6 +131,122 @@ export default function AdminDashboard() {
       notify.error("Error", "Failed to update payment");
     }
   }
+
+  const filterDataByPeriod = (orders: any[], period: 'day' | 'week' | 'month' | 'year') => {
+    const now = new Date();
+    let cutoffDate: Date;
+    let groupByFormat: Intl.DateTimeFormatOptions;
+    let dataPoints = 7;
+
+    switch (period) {
+      case 'day':
+        cutoffDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+        groupByFormat = { month: 'short', day: 'numeric' };
+        dataPoints = 7;
+        break;
+      case 'week':
+        cutoffDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 56); // 8 weeks
+        groupByFormat = { month: 'short', day: 'numeric' };
+        dataPoints = 8;
+        break;
+      case 'month':
+        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+        groupByFormat = { month: 'short', year: 'numeric' };
+        dataPoints = 6;
+        break;
+      case 'year':
+        cutoffDate = new Date(now.getFullYear() - 5, 0, 1);
+        groupByFormat = { year: 'numeric' };
+        dataPoints = 5;
+        break;
+    }
+
+    const filteredOrders = orders.filter((o: any) => new Date(o.created_at) >= cutoffDate);
+
+    // Group data
+    const dataMap = new Map();
+    filteredOrders.forEach((o: any) => {
+      const orderDate = new Date(o.created_at);
+      let key: string;
+
+      if (period === 'day') {
+        key = orderDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      } else if (period === 'week') {
+        const weekStart = new Date(orderDate);
+        weekStart.setDate(orderDate.getDate() - orderDate.getDay());
+        key = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      } else if (period === 'month') {
+        key = orderDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      } else {
+        key = orderDate.getFullYear().toString();
+      }
+
+      const current = dataMap.get(key) || { sales: 0, count: 0 };
+      dataMap.set(key, {
+        sales: current.sales + (Number(o.total_amount) || 0),
+        count: current.count + 1
+      });
+    });
+
+    const chartData = Array.from(dataMap.entries())
+      .map(([date, data]) => ({ date, sales: data.sales, orders: data.count }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(-dataPoints);
+
+    setSalesData(chartData);
+
+    // Transaction breakdown
+    const statusBreakdown = filteredOrders.reduce((acc: any, o: any) => {
+      const status = o.status || 'unknown';
+      if (!acc[status]) acc[status] = { count: 0, revenue: 0 };
+      acc[status].count += 1;
+      acc[status].revenue += Number(o.total_amount) || 0;
+      return acc;
+    }, {});
+    setTransactionsByStatus(Object.entries(statusBreakdown).map(([status, data]: [string, any]) => ({
+      status, count: data.count, revenue: data.revenue
+    })));
+
+    // Top customers
+    const customerMap = new Map();
+    filteredOrders.forEach((o: any) => {
+      if (o.users?.full_name) {
+        const name = o.users.full_name;
+        const current = customerMap.get(name) || { revenue: 0, orders: 0, pending: 0 };
+        customerMap.set(name, {
+          revenue: current.revenue + (Number(o.total_amount) || 0),
+          orders: current.orders + 1,
+          pending: current.pending + (Number(o.pending_amount) || 0)
+        });
+      }
+    });
+    const topCust = Array.from(customerMap.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+    setTopCustomers(topCust);
+
+    // Revenue metrics
+    const totalRevenue = filteredOrders.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
+    const currentPeriodRevenue = chartData[chartData.length - 1]?.sales || 0;
+    const previousPeriodRevenue = chartData[chartData.length - 2]?.sales || 0;
+    const growth = previousPeriodRevenue > 0
+      ? ((currentPeriodRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100
+      : 0;
+    const avgOrderValue = totalRevenue > 0 ? totalRevenue / filteredOrders.length : 0;
+
+    setRevenueMetrics({
+      growth,
+      avgOrderValue,
+      currentMonth: currentPeriodRevenue,
+      previousMonth: previousPeriodRevenue
+    });
+  };
+
+  const handlePeriodChange = (period: 'day' | 'week' | 'month' | 'year') => {
+    setTimePeriod(period);
+    filterDataByPeriod(allOrders, period);
+  };
 
   const handleCollectAmount = (order: any) => {
     setSelectedOrderForPayment(order);
@@ -226,44 +349,150 @@ export default function AdminDashboard() {
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Visualizations & Recent */}
             <div className="lg:col-span-2 space-y-8">
-              {/* Performance Graph */}
+              {/* Enhanced Performance Analytics */}
               <Card className="border-none shadow-sm">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="font-serif text-2xl">Sales Performance</CardTitle>
-                    <CardDescription>Monthly transaction analysis</CardDescription>
+                <CardHeader className="space-y-4">
+                  <div className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="font-serif text-2xl">Sales Performance</CardTitle>
+                      <CardDescription>Comprehensive transaction analysis</CardDescription>
+                    </div>
+                    <Badge variant="outline" className={cn(
+                      "px-3 py-1",
+                      revenueMetrics.growth >= 0 ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
+                    )}>
+                      {revenueMetrics.growth >= 0 ? '↑' : '↓'} {Math.abs(revenueMetrics.growth).toFixed(1)}%
+                    </Badge>
                   </div>
-                  <Select defaultValue="7d">
-                    <SelectTrigger className="w-[120px] bg-transparent border-[#E8E8E8]">
-                      <SelectValue placeholder="Period" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="24h">24 Hours</SelectItem>
-                      <SelectItem value="7d">7 Days</SelectItem>
-                      <SelectItem value="30d">30 Days</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    {['day', 'week', 'month', 'year'].map((period) => (
+                      <Button
+                        key={period}
+                        variant={timePeriod === period ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePeriodChange(period as any)}
+                        className={cn(
+                          "capitalize",
+                          timePeriod === period
+                            ? "bg-[#D4AF37] hover:bg-[#C19B2E] text-white"
+                            : "border-[#E8E8E8] hover:bg-[#F7F5F2]"
+                        )}
+                      >
+                        {period}
+                      </Button>
+                    ))}
+                  </div>
                 </CardHeader>
-                <CardContent className="h-[350px] pt-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={salesData}>
-                      <defs>
-                        <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.1} />
-                          <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8E8E8" />
-                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#6B6B6B', fontSize: 12 }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B6B6B', fontSize: 12 }} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#1A1A1A', borderRadius: '8px', border: 'none', color: '#FFF' }}
-                        itemStyle={{ color: '#D4AF37' }}
-                      />
-                      <Area type="monotone" dataKey="sales" stroke="#D4AF37" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
+                <Tabs defaultValue="overview" className="w-full">
+                  <div className="px-6">
+                    <TabsList className="bg-[#F7F5F2] h-10">
+                      <TabsTrigger value="overview" className="data-[state=active]:bg-white">Overview</TabsTrigger>
+                      <TabsTrigger value="status" className="data-[state=active]:bg-white">By Status</TabsTrigger>
+                      <TabsTrigger value="customers" className="data-[state=active]:bg-white">Top Customers</TabsTrigger>
+                    </TabsList>
+                  </div>
+
+                  <TabsContent value="overview" className="p-0 m-0">
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 py-4">
+                        <div className="bg-[#FDFCF9] rounded-lg p-4">
+                          <p className="text-xs text-[#6B6B6B] uppercase tracking-wider">Avg Order Value</p>
+                          <p className="text-2xl font-bold text-[#1A1A1A] mt-1">Rs. {revenueMetrics.avgOrderValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                        </div>
+                        <div className="bg-[#FDFCF9] rounded-lg p-4">
+                          <p className="text-xs text-[#6B6B6B] uppercase tracking-wider">Current Period</p>
+                          <p className="text-2xl font-bold text-[#1A1A1A] mt-1">Rs. {revenueMetrics.currentMonth.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                        </div>
+                      </div>
+                      <div className="h-[320px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={salesData}>
+                            <defs>
+                              <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.2} />
+                                <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8E8E8" />
+                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#6B6B6B', fontSize: 11 }} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B6B6B', fontSize: 11 }} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#1A1A1A', borderRadius: '12px', border: 'none', color: '#FFF', padding: '12px' }}
+                              labelStyle={{ color: '#D4AF37', fontWeight: 'bold', marginBottom: '8px' }}
+                              itemStyle={{ color: '#FFF' }}
+                              formatter={(value: any) => [`Rs. ${Number(value).toLocaleString()}`, 'Revenue']}
+                            />
+                            <Area type="monotone" dataKey="sales" stroke="#D4AF37" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </TabsContent>
+
+                  <TabsContent value="status" className="p-0 m-0">
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4">
+                        {transactionsByStatus.map((item: any) => {
+                          const statusColors: any = {
+                            delivered: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+                            shipped: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                            processing: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+                            cancelled: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+                            pending_payment: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+                          };
+                          const colors = statusColors[item.status] || { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
+
+                          return (
+                            <div key={item.status} className={cn("p-4 rounded-xl border-2", colors.bg, colors.border)}>
+                              <div className="flex justify-between items-start mb-3">
+                                <Badge variant="outline" className={cn("capitalize font-bold", colors.text, colors.border)}>
+                                  {item.status.replace('_', ' ')}
+                                </Badge>
+                                <span className={cn("text-2xl font-bold", colors.text)}>{item.count}</span>
+                              </div>
+                              <p className="text-xs text-[#6B6B6B] uppercase tracking-wider">Total Revenue</p>
+                              <p className={cn("text-lg font-bold mt-1", colors.text)}>Rs. {item.revenue.toLocaleString()}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </TabsContent>
+
+                  <TabsContent value="customers" className="p-0 m-0">
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader className="bg-[#F7F5F2]/50">
+                          <TableRow>
+                            <TableHead className="pl-6">#</TableHead>
+                            <TableHead>Customer Name</TableHead>
+                            <TableHead className="text-right">Orders</TableHead>
+                            <TableHead className="text-right">Revenue</TableHead>
+                            <TableHead className="text-right pr-6">Pending</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {topCustomers.slice(0, 8).map((customer: any, idx: number) => (
+                            <TableRow key={customer.name} className="hover:bg-[#FDFCF9]">
+                              <TableCell className="pl-6">
+                                <div className={cn(
+                                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                                  idx === 0 ? "bg-[#D4AF37] text-white" : idx === 1 ? "bg-gray-400 text-white" : idx === 2 ? "bg-orange-400 text-white" : "bg-gray-100 text-gray-600"
+                                )}>
+                                  {idx + 1}
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-semibold">{customer.name}</TableCell>
+                              <TableCell className="text-right text-[#6B6B6B]">{customer.orders}</TableCell>
+                              <TableCell className="text-right font-bold text-green-600">Rs. {customer.revenue.toLocaleString()}</TableCell>
+                              <TableCell className="text-right font-bold text-red-600 pr-6">Rs. {customer.pending.toLocaleString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </TabsContent>
+                </Tabs>
               </Card>
 
               {/* Active Order Stream */}

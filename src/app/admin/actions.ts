@@ -553,26 +553,98 @@ export async function loadAdminDashboardDataAction() {
   // Recent 5
   const recentOrders = orders.slice(0, 5);
 
-  // Sales Data (Simple Daily aggregation)
-  // Group by date (DD/MM)
-  const salesMap = new Map();
+  // Enhanced Sales Data Analytics
+  // 1. Monthly aggregation for the last 6 months
+  const monthlyMap = new Map();
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+  
   orders.forEach(o => {
-      const date = new Date(o.created_at).toLocaleDateString('en-GB'); // DD/MM/YYYY
-      const current = salesMap.get(date) || 0;
-      salesMap.set(date, current + (Number(o.total_amount) || 0));
+      const orderDate = new Date(o.created_at);
+      if (orderDate >= sixMonthsAgo) {
+        const monthKey = orderDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        const current = monthlyMap.get(monthKey) || { sales: 0, count: 0 };
+        monthlyMap.set(monthKey, {
+          sales: current.sales + (Number(o.total_amount) || 0),
+          count: current.count + 1
+        });
+      }
   });
-  // Convert to array and take last 7 entries (pseudo)
-  // For actual graph we'd sort keys.
-  const salesData = Array.from(salesMap.entries())
-       .map(([name, total]) => ({ name, total }))
-       .slice(0, 7)
-       .reverse();
+
+  // Sort by date and prepare chart data
+  const salesData = Array.from(monthlyMap.entries())
+    .map(([date, data]) => ({ 
+      date, 
+      sales: data.sales,
+      orders: data.count
+    }))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(-6); // Last 6 months
+
+  // 2. Transaction breakdown by status
+  const statusBreakdown = orders.reduce((acc: any, o) => {
+    const status = o.status || 'unknown';
+    if (!acc[status]) {
+      acc[status] = { count: 0, revenue: 0 };
+    }
+    acc[status].count += 1;
+    acc[status].revenue += Number(o.total_amount) || 0;
+    return acc;
+  }, {});
+
+  const transactionsByStatus = Object.entries(statusBreakdown).map(([status, data]: [string, any]) => ({
+    status,
+    count: data.count,
+    revenue: data.revenue
+  }));
+
+  // 3. Top customers by revenue
+  const customerRevenueMap = new Map();
+  orders.forEach(o => {
+    if (o.users?.full_name) {
+      const customerName = o.users.full_name;
+      const current = customerRevenueMap.get(customerName) || { revenue: 0, orders: 0, pending: 0 };
+      customerRevenueMap.set(customerName, {
+        revenue: current.revenue + (Number(o.total_amount) || 0),
+        orders: current.orders + 1,
+        pending: current.pending + (Number(o.pending_amount) || 0)
+      });
+    }
+  });
+
+  const topCustomers = Array.from(customerRevenueMap.entries())
+    .map(([name, data]) => ({
+      name,
+      revenue: data.revenue,
+      orders: data.orders,
+      pending: data.pending
+    }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10);
+
+  // 4. Calculate revenue trends
+  const currentMonthRevenue = salesData[salesData.length - 1]?.sales || 0;
+  const previousMonthRevenue = salesData[salesData.length - 2]?.sales || 0;
+  const revenueGrowth = previousMonthRevenue > 0 
+    ? ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100 
+    : 0;
+
+  const avgOrderValue = totalRevenue > 0 ? totalRevenue / orders.length : 0;
 
   return {
      stats,
      recentOrders,
      lowStockProducts,
      salesData,
+     transactionsByStatus,
+     topCustomers,
+     revenueMetrics: {
+       growth: revenueGrowth,
+       avgOrderValue,
+       currentMonth: currentMonthRevenue,
+       previousMonth: previousMonthRevenue
+     },
+     allOrders: orders,
      pendingUsers: users.filter((u: any) => !u.approved && ["retailer", "beauty_parlor", "salesman", "sub_admin"].includes(u.role)),
      allUsers: users,
      pendingPaymentOrders: orders.filter(o => {

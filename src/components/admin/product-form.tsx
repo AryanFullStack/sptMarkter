@@ -24,6 +24,7 @@ import { createClient } from "@/supabase/client";
 import { createProduct, updateProduct } from "@/app/admin/actions";
 import { compressAndUploadImage } from "@/utils/image-compression";
 import { Loader2 } from "lucide-react";
+import { notify } from "@/lib/notifications";
 
 interface ProductFormProps {
     product?: any;
@@ -106,7 +107,7 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
             }));
         } catch (error: any) {
             console.error("Error uploading images:", error);
-            alert(`Failed to upload images: ${error.message || "Unknown error"}`);
+            notify.error("Upload Failed", error.message || "Failed to upload images");
         } finally {
             setUploadingImages(false);
         }
@@ -129,14 +130,16 @@ export function ProductForm({ product, onClose }: ProductFormProps) {
 
             if (product) {
                 await updateProduct(product.id, productData);
+                notify.success("Product Updated", "Product has been successfully updated in the catalog.");
             } else {
                 await createProduct(productData);
+                notify.success("Product Added", "New product has been successfully added to the catalog.");
             }
 
             onClose();
         } catch (error: any) {
             console.error("Error saving product:", error);
-            alert(error.message || "Failed to save product");
+            notify.error("Error", error.message || "Failed to save product");
         } finally {
             setLoading(false);
         }

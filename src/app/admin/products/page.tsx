@@ -11,6 +11,7 @@ import { ProductForm } from "@/components/admin/product-form";
 import { Package, Plus, Edit, Trash2, Image as ImageIcon } from "lucide-react";
 import { formatCurrency, formatDate } from "@/utils/export-utils";
 import { deleteProduct } from "@/app/admin/actions";
+import { notify } from "@/lib/notifications";
 
 interface Product {
   id: string;
@@ -66,10 +67,11 @@ export default function ProductsPage() {
 
     try {
       await deleteProduct(productId);
+      notify.success("Product Deleted", "Product has been successfully deleted from the catalog.");
       loadProducts();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting product:", error);
-      alert("Failed to delete product");
+      notify.error("Error", error.message || "Failed to delete product");
     }
   };
 

@@ -19,7 +19,7 @@ export function createAdminClient() {
     return null;
   }
   
-  console.log("✓ Creating admin client with service role key");
+  console.log(`✓ Creating admin client for ${supabaseUrl.split('//')[1].split('.')[0]}...`);
   
   return createClient(
     supabaseUrl,
@@ -28,6 +28,15 @@ export function createAdminClient() {
       auth: {
         autoRefreshToken: false,
         persistSession: false
+      },
+      global: {
+        fetch: (url, options) => {
+          return fetch(url, {
+            ...options,
+            // @ts-ignore
+            duplex: 'half',
+          })
+        }
       }
     }
   )
