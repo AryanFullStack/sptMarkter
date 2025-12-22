@@ -199,22 +199,27 @@ export default function ParlorDashboard() {
                 ) : (
                   <div className="divide-y divide-[#F7F5F2]">
                     {recentOrders.slice(0, 5).map((order: any) => (
-                      <div key={order.id} className="flex justify-between items-center p-6 hover:bg-[#FDFCF9] transition-colors group">
-                        <div className="flex gap-4 items-center">
-                          <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center font-mono text-xs font-bold text-purple-700">#{order.order_number || order.id.slice(0, 6)}</div>
-                          <div>
-                            <p className="font-bold text-[#1A1A1A]">{new Date(order.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                            <p className="text-[10px] text-[#6B6B6B] uppercase tracking-widest font-bold">{order.items?.length || 0} Supplies Procured</p>
+                      <div key={order.id} className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 p-6 hover:bg-[#FDFCF9] transition-colors group">
+                        <div className="flex gap-5 items-start md:items-center flex-1">
+                          <div className="min-w-12 h-12 bg-white rounded-xl flex items-center justify-center font-mono text-xs font-bold text-black shadow-sm">
+                            #{order.order_number || order.id.slice(0, 6)}
+                          </div>
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-sm text-[#1A1A1A]">
+                                {new Date(order.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </p>
+                            </div>
+                            <p className="text-xs text-[#6B6B6B] font-medium">
+                              {order.items?.length || 0} Supplies Procured
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-[#1A1A1A]">Rs. {Number(order.total_amount || 0).toLocaleString()}</p>
-                          {order.payment_status !== 'paid' && Number(order.pending_amount) > 0 && (
-                            <p className="text-[10px] font-bold text-red-500">Pending: Rs. {Number(order.pending_amount).toLocaleString()}</p>
-                          )}
+                        <div className="flex md:flex-col items-start md:items-end justify-between md:justify-start gap-2 md:gap-2 md:text-right ml-16 md:ml-0">
+                          <p className="font-bold text-lg text-[#1A1A1A]">Rs. {Number(order.total_amount || 0).toLocaleString()}</p>
                           <Badge className={cn(
-                            "text-[9px] h-5 px-2 font-bold uppercase tracking-tight",
-                            order.payment_status === 'paid' ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-purple-50 text-purple-700 border-purple-100"
+                            "text-[10px] h-6 px-3 font-bold uppercase tracking-wide",
+                            order.payment_status === 'paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-purple-50 text-purple-700 border-purple-200"
                           )}>
                             {order.payment_status}
                           </Badge>

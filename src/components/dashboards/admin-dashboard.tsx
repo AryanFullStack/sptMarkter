@@ -118,7 +118,7 @@ export default function AdminDashboard() {
   const handleMarkPaid = async (orderId: string) => {
     try {
       await markOrderPaidAction(orderId);
-      toast({ title: "Payment Recorded", description: "Order marked as fully paid." });
+      notify.success("Payment Recorded", "Order marked as fully paid.");
       loadDashboardData();
     } catch (error) {
       notify.error("Error", "Failed to update payment");
@@ -433,7 +433,7 @@ export default function AdminDashboard() {
                             <TableHead>Execution Date</TableHead>
                             <TableHead className="text-right">Commitment</TableHead>
                             <TableHead className="text-right">Current Paid</TableHead>
-                            <TableHead className="text-right">Outstanding</TableHead>
+                            <TableHead className="text-right">Pending</TableHead>
                             <TableHead className="text-center">Agent</TableHead>
                             <TableHead className="pr-6 text-right">Actions</TableHead>
                           </TableRow>
