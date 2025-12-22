@@ -366,7 +366,51 @@ export const placeOrderAction = async (orderPayload: any, items: any[]) => {
         return { error: "Order placed but items failed: " + itemsError.message, orderId: order.id };
     }
 
-    // 3. Process Credit Deduction if applicable
+    // 3. Update Inventory
+    console.log(`ServerAction: Updating inventory for ${items.length} items...`);
+    for (const item of items) {
+        try {
+            // Fetch current stock
+            const { data: product, error: fetchError } = await supabase
+                .from("products")
+                .select("stock_quantity")
+                .eq("id", item.product_id)
+                .single();
+
+            if (fetchError) {
+                console.error(`Error fetching stock for product ${item.product_id}:`, fetchError);
+                continue;
+            }
+
+            const previousQuantity = product.stock_quantity || 0;
+            const newQuantity = Math.max(0, previousQuantity - item.quantity);
+
+            // Update stock
+            const { error: updateError } = await supabase
+                .from("products")
+                .update({ stock_quantity: newQuantity })
+                .eq("id", item.product_id);
+
+            if (updateError) {
+                console.error(`Error updating stock for product ${item.product_id}:`, updateError);
+                continue;
+            }
+
+            // Log inventory change
+            await supabase.from("inventory_logs").insert({
+                product_id: item.product_id,
+                previous_quantity: previousQuantity,
+                new_quantity: newQuantity,
+                quantity_change: -item.quantity,
+                reason: `Order #${order.order_number}`,
+                created_by: orderData.user_id,
+            });
+        } catch (itemErr) {
+            console.error(`Unexpected error updating inventory for product ${item.product_id}:`, itemErr);
+        }
+    }
+
+    // 4. Process Credit Deduction if applicable
     if (payment_method === 'credit_balance') {
         const { data: credit } = await supabase
             .from('user_credits')

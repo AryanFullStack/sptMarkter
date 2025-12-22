@@ -48,8 +48,8 @@ export default function CartPage() {
   };
 
   const subtotal = getCartTotal();
-  const tax = subtotal * 0.05; // 5% tax
-  const shipping = subtotal > 5000 ? 0 : 200; // Free shipping above 5000
+  const tax = 0; // Removed tax
+  const shipping = 0; // Free shipping
   const total = subtotal - discount + tax + shipping;
 
   if (items.length === 0) {
@@ -198,15 +198,13 @@ export default function CartPage() {
                 )}
 
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Tax (5%)</span>
+                  <span className="text-gray-600">Tax</span>
                   <span className="font-medium">Rs. {tax.toLocaleString()}</span>
                 </div>
 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Shipping</span>
-                  <span className="font-medium">
-                    {shipping === 0 ? "FREE" : `Rs. ${shipping}`}
-                  </span>
+                  <span className="font-medium">FREE</span>
                 </div>
 
                 <div className="border-t pt-3 flex justify-between text-lg font-bold">

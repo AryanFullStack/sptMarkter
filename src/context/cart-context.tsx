@@ -27,14 +27,33 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<CartItem[]>([]);
+    const [userRole, setUserRole] = useState<string | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
 
-    // Load cart from localStorage on mount
+    // Load cart from localStorage and fetch user role on mount
     useEffect(() => {
         const savedCart = localStorage.getItem("cart");
         if (savedCart) {
             setItems(JSON.parse(savedCart));
         }
+
+        async function getUserRole() {
+            const { createClient } = await import("@/supabase/client");
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                const { data: userData } = await supabase
+                    .from("users")
+                    .select("role")
+                    .eq("id", user.id)
+                    .single();
+
+                setUserRole(userData?.role || null);
+            }
+        }
+
+        getUserRole();
         setIsLoaded(true);
     }, []);
 
@@ -49,10 +68,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setItems((prevItems) => {
             const existingItem = prevItems.find((item) => item.product_id === product.id);
 
+            // Determine price based on user role
+            let activePrice = product.price_customer || 0;
+            if (userRole === "beauty_parlor") {
+                activePrice = product.price_beauty_parlor || 0;
+            } else if (userRole === "retailer") {
+                activePrice = product.price_retailer || 0;
+            }
+
             if (existingItem) {
                 return prevItems.map((item) =>
                     item.product_id === product.id
-                        ? { ...item, quantity: item.quantity + quantity }
+                        ? { ...item, quantity: item.quantity + quantity, price: activePrice }
                         : item
                 );
             }
@@ -64,7 +91,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                     product_id: product.id,
                     name: product.name,
                     slug: product.slug,
-                    price: product.price_customer, // Will be updated based on user role
+                    price: activePrice,
                     image: product.images?.[0] || "",
                     quantity,
                     stock_quantity: product.stock_quantity || 0,

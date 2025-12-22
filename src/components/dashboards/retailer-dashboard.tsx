@@ -80,7 +80,18 @@ export default function RetailerDashboard() {
 
   const handlePaymentRecorded = () => {
     loadData(); // Reload dashboard data
-    notify.success("Payment Requested", "Your payment request has been sent for approval.");
+    notify.success("Payment Received", "The payment has been recorded and will be verified by our team.");
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "delivered": return "bg-emerald-50 text-emerald-700 border-emerald-100";
+      case "shipped": return "bg-blue-50 text-blue-700 border-blue-100";
+      case "processing": return "bg-amber-50 text-amber-700 border-amber-100";
+      case "confirmed": return "bg-indigo-50 text-indigo-700 border-indigo-100";
+      case "cancelled": return "bg-red-50 text-red-700 border-red-100";
+      default: return "bg-gray-50 text-gray-700 border-gray-100";
+    }
   };
 
   if (loading) {
@@ -218,10 +229,10 @@ export default function RetailerDashboard() {
                         <div className="flex md:flex-col items-start md:items-end justify-between md:justify-start gap-2 md:gap-2 md:text-right ml-16 md:ml-0">
                           <p className="font-bold text-lg text-[#1A1A1A]">Rs. {Number(order.total_amount || 0).toLocaleString()}</p>
                           <Badge className={cn(
-                            "text-[10px] h-6 px-3 font-bold uppercase tracking-wide",
-                            order.payment_status === 'paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"
+                            "text-[10px] h-6 px-3 font-bold uppercase tracking-wide border shadow-none",
+                            getStatusColor(order.status)
                           )}>
-                            {order.payment_status}
+                            {order.status || 'pending'}
                           </Badge>
                         </div>
                       </div>

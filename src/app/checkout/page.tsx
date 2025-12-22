@@ -456,7 +456,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between">
                     <span>Shipping:</span>
-                    <span>{shipping === 0 ? "FREE" : `Rs. ${shipping}`}</span>
+                    <span>FREE</span>
                   </div>
                   <div className="flex justify-between text-lg font-bold border-t pt-2">
                     <span>Total:</span>
@@ -508,7 +508,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between">
                   <span>Shipping:</span>
-                  <span>{shipping === 0 ? "FREE" : `Rs. ${shipping}`}</span>
+                  <span>FREE</span>
                 </div>
                 <div className="flex justify-between font-bold text-base border-t pt-2">
                   <span>Total:</span>
