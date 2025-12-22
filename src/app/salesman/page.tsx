@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/supabase/client";
-import { DollarSign, ShoppingBag, Clock, Users, ArrowUpRight, TrendingUp, Search, ShoppingCart } from "lucide-react";
+import { DollarSign, ShoppingBag, Clock, Users, ArrowUpRight, TrendingUp, Search, ShoppingCart, MapPin, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { getSalesmanDashboardData, getOrderDetails } from "@/app/actions/salesman-actions";
+import { getSalesmanDashboardData, getOrderDetails, getSalesmanRouteToday, getSalesmanAssignedShops } from "@/app/actions/salesman-actions";
 import { notify } from "@/lib/notifications";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -16,6 +16,8 @@ import { Separator } from "@/components/ui/separator";
 
 export default function SalesmanOverview() {
     const [data, setData] = useState<any>(null);
+    const [todayRoute, setTodayRoute] = useState<any[]>([]);
+    const [weeklySchedule, setWeeklySchedule] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -30,8 +32,14 @@ export default function SalesmanOverview() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                const dashboardData = await getSalesmanDashboardData(user.id);
+                const [dashboardData, routeData, scheduleData] = await Promise.all([
+                    getSalesmanDashboardData(user.id),
+                    getSalesmanRouteToday(user.id),
+                    getSalesmanAssignedShops(user.id)
+                ]);
                 setData(dashboardData);
+                setTodayRoute(routeData.route || []);
+                setWeeklySchedule(scheduleData.shops || []);
             }
         } catch (e) {
             notify.error("Error", "Failed to load dashboard data");
@@ -84,6 +92,91 @@ export default function SalesmanOverview() {
                     </Button>
                 </Link>
             </div>
+
+            {/* Today's Route Section */}
+            {todayRoute.length > 0 && (
+                <Card className="border-none shadow-md bg-gradient-to-r from-[#1A1A1A] to-[#2D2D2D] text-white overflow-hidden relative">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4AF37]/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                    <CardHeader>
+                        <CardTitle className="font-serif text-xl flex items-center gap-2">
+                            <Clock className="h-5 w-5 text-[#D4AF37]" /> Today's Route
+                        </CardTitle>
+                        <CardDescription className="text-gray-400">
+                            You have {todayRoute.length} shop{todayRoute.length !== 1 ? 's' : ''} assigned for today.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {todayRoute.map((shop: any) => {
+                                // Find ledger info if available
+                                const ledger = data?.shopLedgers?.find((l: any) => l.id === shop.id);
+                                return (
+                                    <div key={shop.id} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-all group">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <h3 className="font-bold text-lg">{shop.full_name}</h3>
+                                                {shop.address && shop.address[0] && (
+                                                    <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                                                        <MapPin className="h-3 w-3" />
+                                                        {shop.address[0].address_line1}, {shop.address[0].city}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <Link href={`/salesman/shop/${shop.id}`}>
+                                                <Button size="sm" className="bg-[#D4AF37] hover:bg-[#C19B2E] text-white text-xs h-8">
+                                                    Visit
+                                                </Button>
+                                            </Link>
+                                        </div>
+
+                                        <div className="mt-3 pt-3 border-t border-white/10 flex justify-between items-center text-sm">
+                                            <span className="text-gray-400">Pending Due:</span>
+                                            <span className={`font-bold ${Number(ledger?.pending || 0) > 0 ? "text-red-400" : "text-green-400"}`}>
+                                                Rs. {Number(ledger?.pending || 0).toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Weekly Schedule Section */}
+            {weeklySchedule.length > 0 && (
+                <Card className="border-none shadow-sm bg-white">
+                    <CardHeader>
+                        <CardTitle className="font-serif text-xl flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-[#D4AF37]" /> Weekly Schedule
+                        </CardTitle>
+                        <CardDescription>Your recurring shop visits</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                                const shops = weeklySchedule.filter(s => s.schedule?.recurring.includes(day));
+                                if (shops.length === 0) return null;
+                                return (
+                                    <div key={day} className="border rounded-lg p-3 bg-gray-50/50">
+                                        <h4 className="font-bold text-[#D4AF37] mb-2 border-b pb-1">{day}</h4>
+                                        <div className="space-y-2">
+                                            {shops.map(shop => (
+                                                <Link key={shop.id} href={`/salesman/shop/${shop.id}`} className="block">
+                                                    <div className="text-sm p-2 bg-white border rounded hover:border-[#D4AF37] transition-all cursor-pointer">
+                                                        <p className="font-semibold text-[#1A1A1A]">{shop.full_name}</p>
+                                                        <p className="text-xs text-[#6B6B6B] truncate">{shop.address?.[0]?.city}</p>
+                                                    </div>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Key Metrics */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

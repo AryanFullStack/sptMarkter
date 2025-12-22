@@ -9,8 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { notify } from "@/lib/notifications";
-import { Loader2, UserPlus, Tag, Building2, CheckCircle, XCircle, Pencil, TrendingUp, ShoppingBag } from "lucide-react";
+import { Loader2, UserPlus, Tag, Building2, CheckCircle, XCircle, Pencil, TrendingUp, ShoppingBag, Plus, Trash2, Search, Calendar as CalendarIcon, Store, MapPin, Clock } from "lucide-react";
 import { getAllSalesmen, assignSalesmanToBrands, updateSalesman, createSalesman, getAllBrands } from "@/app/admin/actions";
+import { getAssignableShops, assignShopToSalesman, getSalesmanAssignedShops } from "@/app/actions/salesman-actions";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useRouter } from "next/navigation";
 
 interface Brand {
     id: string;
@@ -42,9 +47,18 @@ export function SalesmanManagement() {
     const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [showBrandDialog, setShowBrandDialog] = useState(false);
     const [showEditDialog, setShowEditDialog] = useState(false);
+    const [showShopDialog, setShowShopDialog] = useState(false);
+
+    const [availableShops, setAvailableShops] = useState<any[]>([]);
+    const [assignedShops, setAssignedShops] = useState<any[]>([]);
+    const [selectedShopId, setSelectedShopId] = useState<string>("");
+    const [selectedDays, setSelectedDays] = useState<string[]>([]);
+    const [assignmentDate, setAssignmentDate] = useState<string>("");
 
     const [selectedSalesman, setSelectedSalesman] = useState<Salesman | null>(null);
     const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([]);
+    const [shopSearchQuery, setShopSearchQuery] = useState("");
+    const router = useRouter();
 
     const [creatingUser, setCreatingUser] = useState(false);
     const [updatingUser, setUpdatingUser] = useState(false);
@@ -239,6 +253,101 @@ export function SalesmanManagement() {
         }).format(amount);
     };
 
+    const refreshAssignedShops = async () => {
+        if (!selectedSalesman) return;
+        try {
+            const res = await getSalesmanAssignedShops(selectedSalesman.id);
+            setAssignedShops(res.shops || []);
+            router.refresh();
+        } catch (e) {
+            console.error("Refresh failed:", e);
+        }
+    };
+
+    const openShopDialog = async (salesman: Salesman) => {
+        setSelectedSalesman(salesman);
+        setShowShopDialog(true);
+        setLoading(true);
+
+        try {
+            const [shopsRes, assignedRes] = await Promise.all([
+                getAssignableShops(),
+                getSalesmanAssignedShops(salesman.id)
+            ]);
+            setAvailableShops(shopsRes.shops || []);
+            setAssignedShops(assignedRes.shops || []);
+        } catch (e) {
+            console.error(e);
+            notify.error("Error", "Failed to load shop data");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAddShopToDay = async (shopId: string, day: string) => {
+        if (!selectedSalesman) return;
+
+        const currentShop = assignedShops.find(s => s.id === shopId);
+        const currentDays = currentShop?.schedule?.recurring || [];
+
+        if (currentDays.includes(day)) {
+            notify.info("Already Assigned", `This shop is already assigned for ${day}`);
+            return;
+        }
+
+        const newDays = [...currentDays, day];
+        const currentDates = currentShop?.schedule?.dates || [];
+
+        try {
+            const res = await assignShopToSalesman(selectedSalesman.id, shopId, newDays, currentDates);
+
+            if (res.error) {
+                notify.error("Assignment Failed", res.error);
+                return;
+            }
+
+            notify.success("Assigned", `Successfully added to ${day}`);
+            await refreshAssignedShops();
+        } catch (e: any) {
+            notify.error("Error", e.message || "Failed to assign shop");
+        }
+    };
+
+    const handleRemoveShopFromDay = async (shopId: string, day: string) => {
+        if (!selectedSalesman) return;
+
+        const currentShop = assignedShops.find(s => s.id === shopId);
+        if (!currentShop) return;
+
+        const newDays = currentShop.schedule.recurring.filter((d: string) => d !== day);
+        const currentDates = currentShop.schedule.dates || [];
+
+        try {
+            const res = await assignShopToSalesman(selectedSalesman.id, shopId, newDays, currentDates);
+
+            if (res.error) {
+                notify.error("Removal Failed", res.error);
+                return;
+            }
+
+            notify.success("Removed", `Successfully removed from ${day}`);
+            await refreshAssignedShops();
+        } catch (e: any) {
+            notify.error("Error", e.message || "Failed to remove shop");
+        }
+    };
+
+    const toggleDay = (day: string) => {
+        setSelectedDays(prev =>
+            prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+        );
+    };
+
+    const filteredAvailableShops = availableShops.filter(shop =>
+        shop.full_name?.toLowerCase().includes(shopSearchQuery.toLowerCase()) ||
+        shop.address?.[0]?.city?.toLowerCase().includes(shopSearchQuery.toLowerCase())
+    );
+
     const calculateStats = (salesman: Salesman) => {
         if (!salesman.orders) return { totalSales: 0, ordersToday: 0 };
 
@@ -328,6 +437,14 @@ export function SalesmanManagement() {
                                                 <Tag className="h-4 w-4 mr-1" />
                                                 Brands
                                             </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => openShopDialog(salesman)}
+                                            >
+                                                <Store className="h-4 w-4 mr-1" />
+                                                Shops
+                                            </Button>
                                         </div>
                                     </div>
                                 </CardHeader>
@@ -388,7 +505,8 @@ export function SalesmanManagement() {
                         );
                     })}
                 </div>
-            )}
+            )
+            }
 
             {/* Create Salesman Dialog */}
             <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -568,6 +686,269 @@ export function SalesmanManagement() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+            {/* Weekly Route Planner Dialog */}
+            <Dialog open={showShopDialog} onOpenChange={setShowShopDialog}>
+                <DialogContent className="sm:max-w-[95vw] lg:max-w-7xl h-[90vh] flex flex-col p-0 overflow-hidden bg-[#FDFCF9]">
+                    <DialogHeader className="p-4 md:p-6 border-b bg-white">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <DialogTitle className="font-serif text-xl md:text-2xl flex items-center gap-2">
+                                    <CalendarIcon className="h-6 w-6 text-[#D4AF37]" />
+                                    Weekly Route Planner
+                                </DialogTitle>
+                                <DialogDescription className="text-xs md:text-sm">
+                                    Planning routes for <span className="font-bold text-foreground">{selectedSalesman?.full_name}</span>
+                                </DialogDescription>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 md:h-10 border-[#E8E8E8] hover:bg-gray-50"
+                                    onClick={async () => {
+                                        if (!selectedSalesman) return;
+                                        setLoading(true);
+                                        const res = await getSalesmanAssignedShops(selectedSalesman.id);
+                                        setAssignedShops(res.shops || []);
+                                        setLoading(false);
+                                        notify.success("Refresh", "Routes updated");
+                                    }}
+                                >
+                                    <Clock className="h-4 w-4 md:mr-2" />
+                                    <span className="hidden md:inline">Refresh</span>
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setShowShopDialog(false)} className="lg:hidden">
+                                    Close
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                        {/* 1. Shop Selection Sidebar (Available Shops) */}
+                        <div className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r bg-white flex flex-col overflow-hidden">
+                            <div className="p-4 space-y-4">
+                                <div>
+                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground mb-1.5 block tracking-wider">
+                                        1. Find Shop to Assign
+                                    </Label>
+                                    <div className="relative">
+                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Search shops or cities..."
+                                            className="pl-9 h-10 text-sm border-[#E8E8E8]"
+                                            value={shopSearchQuery}
+                                            onChange={(e) => setShopSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {selectedShopId && (
+                                    <div className="p-3 rounded-lg bg-[#FDFCF9] border border-[#D4AF37] shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <p className="text-[10px] font-bold text-[#D4AF37] uppercase mb-1">Selected Shop</p>
+                                        <p className="text-sm font-bold text-[#1A1A1A]">
+                                            {availableShops.find(s => s.id === selectedShopId)?.full_name}
+                                        </p>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setSelectedShopId("")}
+                                            className="h-6 px-2 mt-1 text-[10px] text-red-500 hover:text-red-700 hover:bg-red-50"
+                                        >
+                                            <XCircle className="h-3 w-3 mr-1" /> Clear Selection
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <Separator />
+
+                            <ScrollArea className="flex-1">
+                                <div className="p-2 space-y-1">
+                                    {filteredAvailableShops.length === 0 ? (
+                                        <div className="py-12 text-center">
+                                            <Store className="h-8 w-8 mx-auto mb-2 opacity-10" />
+                                            <p className="text-xs text-muted-foreground">No shops found</p>
+                                        </div>
+                                    ) : (
+                                        filteredAvailableShops.map((shop) => (
+                                            <div
+                                                key={shop.id}
+                                                onClick={() => setSelectedShopId(shop.id)}
+                                                className={`p-3 rounded-lg cursor-pointer transition-all border ${selectedShopId === shop.id
+                                                    ? "bg-[#D4AF37] border-[#D4AF37] text-white shadow-md ring-2 ring-[#D4AF37]/20"
+                                                    : "bg-white border-transparent hover:border-[#E8E8E8] hover:bg-gray-50"
+                                                    }`}
+                                            >
+                                                <p className={`text-sm font-bold ${selectedShopId === shop.id ? "text-white" : "text-[#1A1A1A]"}`}>
+                                                    {shop.full_name}
+                                                </p>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <MapPin className={`h-3 w-3 ${selectedShopId === shop.id ? "text-white/80" : "text-muted-foreground"}`} />
+                                                    <p className={`text-[11px] ${selectedShopId === shop.id ? "text-white/80" : "text-muted-foreground"} truncate`}>
+                                                        {shop.address?.[0]?.city || 'No City'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </div>
+
+                        {/* 2. Planner Area */}
+                        <div className="flex-1 flex flex-col overflow-hidden bg-[#FDFCF9]">
+                            <div className="p-4 border-b bg-[#F7F5F2]/50 text-center lg:text-left">
+                                <p className="text-xs text-muted-foreground">
+                                    <span className="font-bold text-[#D4AF37]">Instructions:</span> Select a shop from the left, then click <b>"+"</b> on any day to assign.
+                                </p>
+                            </div>
+
+                            {/* Desktop View: 7-Column Grid */}
+                            <div className="hidden lg:block flex-1 overflow-x-auto p-4">
+                                <div className="grid grid-cols-7 gap-4 min-w-[1000px] h-full">
+                                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                                        const shopsForDay = assignedShops.filter(s => s.schedule?.recurring?.includes(day));
+
+                                        return (
+                                            <div key={day} className="flex flex-col h-full bg-white rounded-xl border border-[#E8E8E8] shadow-sm overflow-hidden">
+                                                <div className="p-3 border-b bg-[#F7F5F2] flex items-center justify-between">
+                                                    <h3 className="font-bold text-[#1A1A1A]">{day}</h3>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className={`h-7 w-7 rounded-full transition-all border shadow-sm ${selectedShopId
+                                                            ? "bg-white hover:bg-[#D4AF37] hover:text-white"
+                                                            : "opacity-30 cursor-not-allowed"
+                                                            }`}
+                                                        disabled={!selectedShopId}
+                                                        onClick={() => handleAddShopToDay(selectedShopId, day)}
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+
+                                                <ScrollArea className="flex-1">
+                                                    <div className="p-2 space-y-2">
+                                                        {shopsForDay.length === 0 ? (
+                                                            <div className="py-8 text-center px-2">
+                                                                <Clock className="h-8 w-8 mx-auto mb-2 opacity-5 text-muted-foreground" />
+                                                                <p className="text-[10px] text-muted-foreground italic">No visits scheduled</p>
+                                                            </div>
+                                                        ) : (
+                                                            shopsForDay.map(shop => (
+                                                                <div
+                                                                    key={`${day}-${shop.id}`}
+                                                                    className="group p-2.5 bg-[#FDFCF9] border border-[#E8E8E8] rounded-xl hover:border-[#D4AF37] hover:shadow-sm transition-all relative"
+                                                                >
+                                                                    <p className="text-xs font-bold text-[#1A1A1A] pr-6 truncate">{shop.full_name}</p>
+                                                                    <p className="text-[10px] text-[#6B6B6B] truncate flex items-center gap-1 mt-0.5">
+                                                                        <MapPin className="h-2 w-2" /> {shop.address?.[0]?.city}
+                                                                    </p>
+
+                                                                    <button
+                                                                        onClick={() => handleRemoveShopFromDay(shop.id, day)}
+                                                                        className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 h-5 w-5 bg-red-50 text-red-500 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                                                                        title="Remove from day"
+                                                                    >
+                                                                        <Trash2 className="h-2.5 w-2.5" />
+                                                                    </button>
+                                                                </div>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                </ScrollArea>
+
+                                                <div className="p-2 bg-[#F7F5F2]/50 border-t text-[10px] font-bold text-center text-muted-foreground">
+                                                    {shopsForDay.length} Shops
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Mobile View: Tabs */}
+                            <div className="lg:hidden flex-1 flex flex-col overflow-hidden">
+                                <Tabs defaultValue="Monday" className="flex-1 flex flex-col">
+                                    <div className="px-4 py-2 border-b bg-white overflow-x-auto no-scrollbar">
+                                        <TabsList className="bg-[#F7F5F2] h-10 p-1">
+                                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                                <TabsTrigger
+                                                    key={day}
+                                                    value={day}
+                                                    className="text-[11px] md:text-xs px-3 data-[state=active]:bg-[#D4AF37] data-[state=active]:text-white h-8"
+                                                >
+                                                    {day.substring(0, 3)}
+                                                </TabsTrigger>
+                                            ))}
+                                        </TabsList>
+                                    </div>
+
+                                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                                        const shopsForDay = assignedShops.filter(s => s.schedule?.recurring?.includes(day));
+                                        return (
+                                            <TabsContent key={day} value={day} className="flex-1 flex flex-col m-0 p-4 overflow-hidden">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <h3 className="font-bold text-lg">{day} Schedule</h3>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => handleAddShopToDay(selectedShopId, day)}
+                                                        disabled={!selectedShopId}
+                                                        className="bg-[#2D5F3F]"
+                                                    >
+                                                        <Plus className="h-4 w-4 mr-1" /> Add Selected
+                                                    </Button>
+                                                </div>
+
+                                                <ScrollArea className="flex-1">
+                                                    <div className="space-y-3">
+                                                        {shopsForDay.length === 0 ? (
+                                                            <div className="py-12 text-center border-2 border-dashed rounded-xl border-[#E8E8E8]">
+                                                                <Clock className="h-10 w-10 mx-auto mb-2 opacity-10" />
+                                                                <p className="text-sm text-muted-foreground italic">No visits scheduled for {day}</p>
+                                                                {!selectedShopId && <p className="text-[10px] text-muted-foreground mt-1">Select a shop above to add here</p>}
+                                                            </div>
+                                                        ) : (
+                                                            shopsForDay.map(shop => (
+                                                                <div
+                                                                    key={`${day}-${shop.id}`}
+                                                                    className="p-4 bg-white border border-[#E8E8E8] rounded-xl flex items-center justify-between shadow-sm"
+                                                                >
+                                                                    <div>
+                                                                        <p className="font-bold text-sm">{shop.full_name}</p>
+                                                                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                                            <MapPin className="h-3 w-3" /> {shop.address?.[0]?.city}
+                                                                        </p>
+                                                                    </div>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={() => handleRemoveShopFromDay(shop.id, day)}
+                                                                        className="h-8 w-8 text-red-500 hover:bg-red-50"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                </ScrollArea>
+                                            </TabsContent>
+                                        );
+                                    })}
+                                </Tabs>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="p-4 border-t bg-white hidden lg:flex">
+                        <Button variant="outline" onClick={() => setShowShopDialog(false)}>
+                            Close Planner
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div >
     );
 }

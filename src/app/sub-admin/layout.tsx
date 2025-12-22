@@ -11,6 +11,7 @@ import {
     Package,
     Activity,
     DollarSign,
+    Users,
     Menu,
     X,
     Bell,
@@ -24,6 +25,7 @@ import UserProfile from "@/components/user-profile";
 const navigation = [
     { name: "Dashboard", href: "/sub-admin", icon: LayoutDashboard },
     { name: "Payments", href: "/sub-admin/payments", icon: DollarSign },
+    { name: "Salesmen", href: "/sub-admin/salesmen", icon: Users },
     { name: "Orders", href: "/sub-admin/orders", icon: ShoppingCart },
     { name: "Stock", href: "/sub-admin/stock", icon: Package },
     { name: "Activity", href: "/sub-admin/activity", icon: Activity },

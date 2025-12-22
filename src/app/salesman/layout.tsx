@@ -23,12 +23,12 @@ import { Button } from "@/components/ui/button";
 import UserProfile from "@/components/user-profile";
 
 const navigation = [
-    { name: "Dashboard", href: "/salesman", icon: LayoutDashboard },
-    { name: "Shop Ledgers", href: "/salesman/ledgers", icon: Users },
+    { name: "Today's Route", href: "/salesman", icon: LayoutDashboard },
+    { name: "My Shops", href: "/salesman/shops", icon: Store },
     { name: "Order History", href: "/salesman/history", icon: ShoppingCart },
     { name: "Payment Requests", href: "/salesman/requests", icon: DollarSign },
     { name: "My Brands", href: "/salesman/brands", icon: Tag },
-    { name: "Find Shop", href: "/salesman/shops", icon: Store },
+    { name: "Shop Ledgers", href: "/salesman/ledgers", icon: Users },
     { name: "Profile", href: "/salesman/profile", icon: UserCircle },
 ];
 

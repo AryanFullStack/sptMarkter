@@ -34,6 +34,223 @@ export async function getAssignedBrands(salesmanId: string) {
   return { brands: data };
 }
 
+/**
+ * Get all shops available for assignment
+ */
+export async function getAssignableShops() {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  const { data, error } = await supabase
+    .from("users")
+    .select(`
+      id, 
+      full_name, 
+      email, 
+      role, 
+      phone, 
+      address:addresses (
+        city, 
+        address_line1
+      )
+    `)
+    .in("role", ["retailer", "beauty_parlor"])
+    .order("full_name");
+
+  if (error) {
+    console.error("Error fetching shops:", error);
+    return { error: "Failed to fetch shops" };
+  }
+
+  return { shops: data };
+}
+
+/**
+ * Assign shop to salesman with schedule
+ */
+export async function assignShopToSalesman(
+  salesmanId: string, 
+  shopId: string, 
+  recurringDays: string[], 
+  assignmentDates: string[]
+) {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  // 1. Clear existing assignments for this pair (optional, or just add?)
+  console.log(`[assignShopToSalesman] Start. Salesman: ${salesmanId}, Shop: ${shopId}, Days: ${recurringDays.join(',')}, Dates: ${assignmentDates.join(',')}`);
+
+  // Let's remove existing for this pair to avoid duplicates/conflicts if re-assigning
+  // But maybe we want to Append? The UI should probably handle the "Current State".
+  // For now, let's Delete All for this pair and Insert New to be safe and clean.
+  
+  const { error: deleteError } = await supabase
+    .from("salesman_shop_assignments")
+    .delete()
+    .eq("salesman_id", salesmanId)
+    .eq("shop_id", shopId);
+
+  if (deleteError) {
+    console.error("Error clearing old assignments:", deleteError);
+    return { error: "Failed to update assignments" };
+  }
+
+  const inserts = [];
+  
+  // Recurring
+  for (const day of recurringDays) {
+    inserts.push({
+      salesman_id: salesmanId,
+      shop_id: shopId,
+      recurring_day: day,
+      assignment_date: null
+    });
+  }
+
+  // Specific Dates
+  for (const date of assignmentDates) {
+    inserts.push({
+      salesman_id: salesmanId,
+      shop_id: shopId,
+      recurring_day: null,
+      assignment_date: date
+    });
+  }
+
+  if (inserts.length > 0) {
+    console.log(`[assignShopToSalesman] Inserting ${inserts.length} rows`);
+    const { error: insertError } = await supabase
+      .from("salesman_shop_assignments")
+      .insert(inserts);
+
+    if (insertError) {
+       console.error("Error inserting assignments:", insertError);
+       return { error: "Failed to save assignments" };
+    }
+  } else {
+     console.log(`[assignShopToSalesman] No inserts generated. Days/Dates empty.`);
+  }
+  
+  // Also update the legacy 'assigned_salesman_id' on users table for backward compat / single owner
+  console.log(`[assignShopToSalesman] Updating user legacy field`);
+  const { error: updateError } = await supabase.from("users").update({ assigned_salesman_id: salesmanId }).eq("id", shopId);
+  
+  if (updateError) {
+      console.error("[assignShopToSalesman] Error updating legacy field:", updateError);
+  }
+
+  console.log(`[assignShopToSalesman] Success. REVALIDATING PATHS.`);
+
+  revalidatePath("/admin/salesmen");
+  revalidatePath("/salesman");
+  revalidatePath("/salesman/shops");
+  return { success: true };
+}
+
+/**
+ * Get assigned shops for a salesman
+ */
+export async function getSalesmanAssignedShops(salesmanId: string) {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  const { data: assignments, error } = await supabase
+    .from("salesman_shop_assignments")
+    .select(`
+      shop_id,
+      recurring_day,
+      assignment_date,
+      shop:shop_id (
+        id,
+        full_name,
+        address:addresses (
+          address_line1,
+          city
+        ), 
+        pending_amount_limit
+      )
+    `)
+    .eq("salesman_id", salesmanId);
+
+  if (error) {
+    console.error("Error fetching assigned shops:", error);
+    return { error: "Failed to fetch assigned shops" };
+  }
+
+  // Process into a nice list
+  // We want: List of Unique Shops, with their "Schedule"
+  const shopMap = new Map();
+
+  assignments?.forEach((a: any) => {
+      const s = a.shop;
+      if (!s) return;
+      
+      const shopId = s.id;
+      if (!shopMap.has(shopId)) {
+          shopMap.set(shopId, {
+              ...s,
+              schedule: { recurring: [], dates: [] }
+          });
+      }
+      const entry = shopMap.get(shopId);
+      if (a.recurring_day && !entry.schedule.recurring.includes(a.recurring_day)) {
+          entry.schedule.recurring.push(a.recurring_day);
+      }
+      if (a.assignment_date && !entry.schedule.dates.includes(a.assignment_date)) {
+          entry.schedule.dates.push(a.assignment_date);
+      }
+  });
+
+  const finalShops = Array.from(shopMap.values());
+  console.log(`[getSalesmanAssignedShops] Returning ${finalShops.length} shops for salesman ${salesmanId}`);
+  return { shops: finalShops };
+}
+
+/**
+ * Get Today's Route (Shops assigned for Today)
+ */
+export async function getSalesmanRouteToday(salesmanId: string) {
+  const supabase = createAdminClient();
+  if (!supabase) throw new Error("Admin client unavailable");
+
+  const today = new Date();
+  const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }); // Monday, Tuesday...
+  const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  const { data, error } = await supabase
+      .from("salesman_shop_assignments")
+      .select(`
+          shop:shop_id (
+              id,
+              full_name,
+              phone,
+              email,
+              role,
+              pending_amount_limit,
+              address:addresses (
+                address_line1,
+                city
+              )
+          )
+      `)
+      .eq("salesman_id", salesmanId)
+      .or(`recurring_day.eq.${dayName},assignment_date.eq.${dateStr}`);
+
+  if (error) {
+      console.error("Error fetching route:", error);
+      return { error: "Failed to fetch route" };
+  }
+
+  // Dedup in case both match
+  const uniqueShops = new Map();
+  data?.forEach((item: any) => {
+      if (item.shop) uniqueShops.set(item.shop.id, item.shop);
+  });
+
+  return { route: Array.from(uniqueShops.values()) };
+}
+
+
 
 
 /**
@@ -190,6 +407,18 @@ export async function createOrderForClient(
 
   if (salesmanData?.role !== "salesman") {
     return { error: "Unauthorized: Salesman access required" };
+  }
+
+  // Verify Shop Assignment
+  const { data: shopAssignment } = await supabase
+      .from("salesman_shop_assignments")
+      .select("id")
+      .eq("salesman_id", user.id)
+      .eq("shop_id", clientId)
+      .single();
+
+  if (!shopAssignment) {
+      return { error: "Unauthorized: You are not assigned to this shop. Please contact your administrator." };
   }
 
   // Verify brand assignment
@@ -501,25 +730,34 @@ export async function getSalesmanDashboardData(salesmanId: string) {
   const totalCollection = allOrders?.reduce((sum, o) => sum + Number(o.paid_amount || 0), 0) || 0;
   const totalPending = allOrders?.reduce((sum, o) => sum + Number(o.pending_amount || 0), 0) || 0;
   
-  const clientsServed = new Set(allOrders?.map((o) => o.user_id).filter(Boolean)).size;
 
   // Calculate Ledger Data dynamically from orders
-  // (Replacing reliance on 'salesman_shop_ledger' table)
+  // STRICT VISIBILITY: Salesmen only see their assigned shops and their own brand orders
+  
+  // 1. Fetch Assigned Shops to form the base list
+  const assignedShopsRes = await getSalesmanAssignedShops(salesmanId);
+  const assignedShops = assignedShopsRes.shops || [];
+  const assignedShopIds = new Set(assignedShops.map((s: any) => s.id));
+
+  const clientsServed = new Set(allOrders?.map((o) => o.user_id).filter(Boolean)).size;
 
   const brandPendingMap: Record<string, { id: string; name: string; amount: number }> = {};
-  const shopLedgersMap: Record<string, { id: string; name: string; pending: number; last_updated: string }> = {};
+  const shopLedgersMap: Record<string, { id: string; name: string; pending: number; last_updated: string; address_line1?: string; city?: string }> = {};
+
+  // Initialize shop ledgers with assigned shops (even if 0 pending)
+  assignedShops.forEach((s: any) => {
+      shopLedgersMap[s.id] = {
+          id: s.id,
+          name: s.full_name || "Unknown Shop",
+          pending: 0,
+          last_updated: s.created_at, // default
+          address_line1: s.address?.[0]?.address_line1,
+          city: s.address?.[0]?.city,
+      };
+  });
 
   // We need to fetch user details for the shop names since allOrders only has user_id
-  const userIds = Array.from(new Set(allOrders?.map(o => o.user_id).filter(Boolean)));
-  let userMap: Record<string, string> = {};
-  
-  if (userIds.length > 0) {
-    const { data: users } = await supabase
-       .from("users")
-       .select("id, full_name")
-       .in("id", userIds);
-    users?.forEach(u => userMap[u.id] = u.full_name || "Unknown Shop");
-  }
+
 
   // Helper to find brand name (if we have brands loaded)
   const brandMap: Record<string, string> = {};
@@ -529,18 +767,15 @@ export async function getSalesmanDashboardData(salesmanId: string) {
      if (Number(order.pending_amount) > 0) {
         // 1. Group by Shop
         const uId = order.user_id;
-        if (uId) {
-            if (!shopLedgersMap[uId]) {
-                shopLedgersMap[uId] = {
-                    id: uId,
-                    name: userMap[uId] || "Client",
-                    pending: 0,
-                    last_updated: order.created_at
-                };
-            }
-            shopLedgersMap[uId].pending += Number(order.pending_amount);
-            if (new Date(order.created_at) > new Date(shopLedgersMap[uId].last_updated)) {
-                shopLedgersMap[uId].last_updated = order.created_at;
+        if (uId && assignedShopIds.has(uId)) {
+            // Only count if shop is currently assigned
+            if (shopLedgersMap[uId]) {
+                shopLedgersMap[uId].pending += Number(order.pending_amount);
+                const orderDate = new Date(order.created_at);
+                const lastDate = new Date(shopLedgersMap[uId].last_updated);
+                if (orderDate > lastDate) {
+                    shopLedgersMap[uId].last_updated = order.created_at;
+                }
             }
         }
 
