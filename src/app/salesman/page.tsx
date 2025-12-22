@@ -223,6 +223,9 @@ export default function SalesmanOverview() {
                                         </div>
                                         <div className="text-right">
                                             <p className="font-bold text-[#1A1A1A]">Rs. {Number(order.total_amount).toLocaleString()}</p>
+                                            {order.payment_status !== "paid" && Number(order.pending_amount) > 0 && (
+                                                <p className="text-[10px] font-bold text-red-500">Pending: Rs. {Number(order.pending_amount).toLocaleString()}</p>
+                                            )}
                                             <Badge variant={order.payment_status === 'paid' ? 'default' : 'destructive'} className="text-[10px] h-5">
                                                 {order.payment_status?.toUpperCase()}
                                             </Badge>
