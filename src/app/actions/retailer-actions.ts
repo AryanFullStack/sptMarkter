@@ -43,9 +43,21 @@ export async function getRetailerDashboardData() {
   // Collect all product IDs
   const productIds = new Set<string>();
   orders.forEach((o: any) => {
-    o.order_items.forEach((i: any) => {
-       if (i.product_id) productIds.add(i.product_id);
-    });
+    // Standard order items
+    if (o.order_items && Array.isArray(o.order_items)) {
+      o.order_items.forEach((i: any) => {
+         if (i.product_id) productIds.add(i.product_id.toString());
+      });
+    }
+    
+    // Salesman orders store items in a JSON column called 'items'
+    if (o.items && Array.isArray(o.items)) {
+      o.items.forEach((i: any) => {
+        // Try multiple possible keys for product ID
+        const pid = i.product_id || i.id || i.productId;
+        if (pid) productIds.add(pid.toString());
+      });
+    }
   });
 
   let productsMap = new Map();
@@ -54,7 +66,7 @@ export async function getRetailerDashboardData() {
         .from('products')
         .select(`
             id, 
-            title, 
+            name, 
             brand_id, 
             brands (id, name)
         `)
@@ -80,18 +92,49 @@ export async function getRetailerDashboardData() {
   orders.forEach((order: any) => {
     if (order.status === 'cancelled') return; // Skip cancelled
 
-    order.order_items.forEach((item: any) => {
-      // Manual Join
-      const product = productsMap.get(item.product_id);
-      const brand = product?.brands;
-      const brandName = brand?.name || "Unbranded";
-      const brandId = brand?.id || "unbranded";
-      
-      const current = brandMap.get(brandId) || { name: brandName, total: 0, count: 0 };
-      current.total += Number(item.subtotal || (item.quantity * item.price));
-      current.count += item.quantity;
-      brandMap.set(brandId, current);
-    });
+    // 1. Process standard order items
+    if (order.order_items && Array.isArray(order.order_items)) {
+      order.order_items.forEach((item: any) => {
+        const product = productsMap.get(item.product_id?.toString());
+        // Handle brands being an array or object
+        let brand = product?.brands;
+        if (Array.isArray(brand)) brand = brand[0];
+        
+        const brandName = brand?.name || "Unbranded";
+        const brandId = brand?.id || "unbranded";
+        
+        const current = brandMap.get(brandId) || { name: brandName, total: 0, count: 0 };
+        current.total += Number(item.subtotal || (item.quantity * item.price) || 0);
+        current.count += (item.quantity || 0);
+        brandMap.set(brandId, current);
+      });
+    } 
+    // 2. Process items from the JSON column (Salesman orders)
+    if (order.items && Array.isArray(order.items)) {
+      order.items.forEach((item: any) => {
+        const pid = item.product_id || item.id || item.productId;
+        const product = productsMap.get(pid?.toString());
+        
+        // Handle brands being an array or object
+        let brand = product?.brands;
+        if (Array.isArray(brand)) brand = brand[0];
+        
+        const brandId = brand?.id || "unbranded";
+        const brandName = brand?.name || "Unbranded";
+        
+        const current = brandMap.get(brandId) || { name: brandName, total: 0, count: 0 };
+        
+        // Determine price based on user role if available, or use the price stored in item
+        // Standard keys: price, beauty_price, retailer_price
+        const price = item.price || 
+                     (userProfile?.role === 'beauty_parlor' ? (item.beauty_price || item.price_beauty_parlor) : 
+                                                              (item.retailer_price || item.price_retailer)) || 0;
+        
+        current.total += (item.quantity || 0) * price;
+        current.count += (item.quantity || 0);
+        brandMap.set(brandId, current);
+      });
+    }
   });
 
   const brandSummary = Array.from(brandMap.values()).sort((a, b) => b.total - a.total);

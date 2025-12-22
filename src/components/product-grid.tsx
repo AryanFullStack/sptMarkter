@@ -6,6 +6,7 @@ import { useWishlist } from "@/context/wishlist-context";
 import { notify } from "@/lib/notifications";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/supabase/client";
+import { useEffect, useState } from "react";
 
 interface ProductGridProps {
     products: any[];
@@ -16,6 +17,46 @@ export function ProductGrid({ products }: ProductGridProps) {
     const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
     const router = useRouter();
     const supabase = createClient();
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [isLoadingRole, setIsLoadingRole] = useState(true);
+
+    useEffect(() => {
+        async function getUserRole() {
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                const { data: userData } = await supabase
+                    .from("users")
+                    .select("role")
+                    .eq("id", user.id)
+                    .single();
+
+                setUserRole(userData?.role || null);
+            }
+            setIsLoadingRole(false);
+        }
+
+        getUserRole();
+    }, []);
+
+    const getProductPrice = (product: any) => {
+        // If not logged in or still loading, show customer price as default
+        if (!userRole || isLoadingRole) {
+            return product.price_customer || 0;
+        }
+
+        // Return price based on user role
+        switch (userRole) {
+            case "beauty_parlor":
+                return product.price_beauty_parlor || 0;
+            case "retailer":
+                return product.price_retailer || 0;
+            case "customer":
+            case "local_customer":
+            default:
+                return product.price_customer || 0;
+        }
+    };
 
     const handleAddToCart = (product: any) => {
         addToCart(product, 1);
@@ -57,7 +98,7 @@ export function ProductGrid({ products }: ProductGridProps) {
                     id={product.id}
                     name={product.name}
                     slug={product.slug}
-                    price={product.price_customer}
+                    price={getProductPrice(product)}
                     image={
                         product.images?.[0] ||
                         "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&q=80"

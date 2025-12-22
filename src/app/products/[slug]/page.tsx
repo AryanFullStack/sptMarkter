@@ -192,25 +192,43 @@ export default async function ProductDetailPage({
               Related Products
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {relatedProducts.map((relatedProduct: any) => (
-                <ProductCard
-                  key={relatedProduct.id}
-                  id={relatedProduct.id}
-                  name={relatedProduct.name}
-                  slug={relatedProduct.slug}
-                  price={relatedProduct.price_customer}
-                  image={relatedProduct.images?.[0]}
-                  brand={relatedProduct.brand_id}
-                  stockStatus={
-                    relatedProduct.stock_quantity === 0
-                      ? "out_of_stock"
-                      : relatedProduct.stock_quantity <= 10
-                        ? "low_stock"
-                        : "in_stock"
-                  }
-                  stockCount={relatedProduct.stock_quantity}
-                />
-              ))}
+              {relatedProducts.map(async (relatedProduct: any) => {
+                // Since this is a server component, we fetch the correct price here or let the card handle it
+                // Actually, let's keep it simple and just pass the whole product if we update ProductCard, 
+                // but for now let's just use the customer price as default and let the cart handle the real price.
+                // However, the REQUEST says "show same price which show onits dashboard price".
+                // So let's fetch role here too.
+                const { data: { user } } = await supabase.auth.getUser();
+                let userRole = 'local_customer';
+                if (user) {
+                  const { data: userData } = await supabase.from('users').select('role').eq('id', user.id).single();
+                  userRole = userData?.role || 'local_customer';
+                }
+
+                let displayPrice = relatedProduct.price_customer;
+                if (userRole === 'beauty_parlor') displayPrice = relatedProduct.price_beauty_parlor;
+                else if (userRole === 'retailer') displayPrice = relatedProduct.price_retailer;
+
+                return (
+                  <ProductCard
+                    key={relatedProduct.id}
+                    id={relatedProduct.id}
+                    name={relatedProduct.name}
+                    slug={relatedProduct.slug}
+                    price={displayPrice}
+                    image={relatedProduct.images?.[0]}
+                    brand={relatedProduct.brand_id}
+                    stockStatus={
+                      relatedProduct.stock_quantity === 0
+                        ? "out_of_stock"
+                        : relatedProduct.stock_quantity <= 10
+                          ? "low_stock"
+                          : "in_stock"
+                    }
+                    stockCount={relatedProduct.stock_quantity}
+                  />
+                );
+              })}
             </div>
           </div>
         )}
