@@ -78,6 +78,29 @@ export async function deleteBrand(id: string) {
   const supabase = createAdminClient();
   if (!supabase) return { error: "Server configuration error" };
 
+  // First, update all products that reference this brand to set brand_id to NULL
+  const { error: productsError } = await supabase
+    .from("products")
+    .update({ brand_id: null })
+    .eq("brand_id", id);
+
+  if (productsError) {
+    console.error("Error updating products:", productsError);
+    return { error: `Failed to update products: ${productsError.message}` };
+  }
+
+  // Second, delete related salesman_brands entries to avoid RLS issues with cascade delete
+  const { error: salesmanBrandsError } = await supabase
+    .from("salesman_brands")
+    .delete()
+    .eq("brand_id", id);
+
+  if (salesmanBrandsError) {
+    console.error("Error deleting salesman_brands:", salesmanBrandsError);
+    return { error: `Failed to remove brand assignments: ${salesmanBrandsError.message}` };
+  }
+
+  // Finally, delete the brand itself
   const { error } = await supabase.from("brands").delete().eq("id", id);
 
   if (error) {
