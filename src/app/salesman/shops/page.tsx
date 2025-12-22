@@ -86,6 +86,14 @@ export default function FindShopsPage() {
                                                     {client.role?.replace('_', ' ')}
                                                 </Badge>
                                             </div>
+                                            {client.addresses && client.addresses.length > 0 && (
+                                                <div className="flex items-start gap-2 text-sm text-[#6B6B6B] mt-1">
+                                                    <MapPin className="h-3 w-3 mt-0.5" />
+                                                    <span>
+                                                        {client.addresses[0].address_line1}, {client.addresses[0].city}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                         <ArrowRight className="h-5 w-5 text-muted-foreground" />
                                     </CardContent>

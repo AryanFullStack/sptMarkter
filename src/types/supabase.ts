@@ -364,6 +364,7 @@ export type Database = {
         Row: {
           assigned_to: string | null
           billing_address: Json | null
+          brand_id: string | null
           coupon_id: string | null
           created_at: string | null
           discount_amount: number | null
@@ -383,6 +384,7 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           billing_address?: Json | null
+          brand_id?: string | null
           coupon_id?: string | null
           created_at?: string | null
           discount_amount?: number | null
@@ -402,6 +404,7 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           billing_address?: Json | null
+          brand_id?: string | null
           coupon_id?: string | null
           created_at?: string | null
           discount_amount?: number | null
@@ -424,6 +427,13 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
