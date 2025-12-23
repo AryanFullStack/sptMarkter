@@ -13,6 +13,7 @@ import { adjustStock } from "@/app/admin/actions";
 import { Package, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
 import { formatDate } from "@/utils/export-utils";
 import { notify } from "@/lib/notifications";
+import { cn } from "@/lib/utils";
 
 interface Product {
     id: string;
@@ -28,6 +29,7 @@ export default function InventoryPage() {
     const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
     const [adjustment, setAdjustment] = useState({ quantity: 0, reason: "" });
 
+    const [stockFilter, setStockFilter] = useState<"all" | "low" | "medium">("all");
     const supabase = createClient();
 
     useEffect(() => {
@@ -171,6 +173,17 @@ export default function InventoryPage() {
         }).length
     };
 
+    const filteredProducts = products.filter(p => {
+        const stock = p.stock_quantity || 0;
+        if (stockFilter === "low") return stock <= 10;
+        if (stockFilter === "medium") return stock > 10 && stock <= 50;
+        return true;
+    });
+
+    const toggleFilter = (filter: "low" | "medium" | "all") => {
+        setStockFilter(prev => prev === filter ? "all" : filter);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -187,7 +200,13 @@ export default function InventoryPage() {
 
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
+                <Card
+                    className={cn(
+                        "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
+                        stockFilter === "low" && "ring-red-500 bg-red-50/10 shadow-md"
+                    )}
+                    onClick={() => toggleFilter("low")}
+                >
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-[#6B6B6B]">
                             Low Stock Alert
@@ -195,15 +214,21 @@ export default function InventoryPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-[#8B3A3A]" />
-                            <span className="text-2xl font-bold text-[#8B3A3A]">
+                            <AlertTriangle className={cn("h-5 w-5", stockFilter === "low" ? "text-red-700" : "text-[#8B3A3A]")} />
+                            <span className={cn("text-2xl font-bold", stockFilter === "low" ? "text-red-700" : "text-[#8B3A3A]")}>
                                 {stats.lowStock}
                             </span>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card
+                    className={cn(
+                        "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
+                        stockFilter === "medium" && "ring-orange-500 bg-orange-50/10 shadow-md"
+                    )}
+                    onClick={() => toggleFilter("medium")}
+                >
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-[#6B6B6B]">
                             Medium Stock
@@ -211,15 +236,21 @@ export default function InventoryPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center gap-2">
-                            <Package className="h-5 w-5 text-[#C77D2E]" />
-                            <span className="text-2xl font-bold text-[#C77D2E]">
+                            <Package className={cn("h-5 w-5", stockFilter === "medium" ? "text-orange-700" : "text-[#C77D2E]")} />
+                            <span className={cn("text-2xl font-bold", stockFilter === "medium" ? "text-orange-700" : "text-[#C77D2E]")}>
                                 {stats.mediumStock}
                             </span>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card
+                    className={cn(
+                        "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
+                        stockFilter === "all" && "ring-[#2D5F3F] bg-[#2D5F3F]/5 shadow-md"
+                    )}
+                    onClick={() => setStockFilter("all")}
+                >
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-[#6B6B6B]">
                             Total Products
@@ -227,7 +258,7 @@ export default function InventoryPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center gap-2">
-                            <Package className="h-5 w-5 text-[#D4AF37]" />
+                            <Package className={cn("h-5 w-5", stockFilter === "all" ? "text-[#1E4D2B]" : "text-[#D4AF37]")} />
                             <span className="text-2xl font-bold text-[#1A1A1A]">
                                 {stats.total}
                             </span>
@@ -238,15 +269,29 @@ export default function InventoryPage() {
 
             {/* Products Table */}
             <Card>
-                <CardHeader>
-                    <CardTitle className="font-serif text-2xl">Stock Levels</CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="font-serif text-2xl">
+                            {stockFilter === "low" ? "Low Stock Items" : stockFilter === "medium" ? "Medium Stock Items" : "Stock Levels"}
+                        </CardTitle>
+                    </div>
+                    {stockFilter !== "all" && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setStockFilter("all")}
+                            className="text-xs font-bold text-[#6B6B6B] hover:text-[#1A1A1A]"
+                        >
+                            Clear Filter
+                        </Button>
+                    )}
                 </CardHeader>
                 <CardContent>
                     {loading ? (
                         <div className="text-center py-12 text-[#6B6B6B]">Loading...</div>
                     ) : (
                         <DataTable
-                            data={products}
+                            data={filteredProducts}
                             columns={productColumns}
                             searchable
                             searchPlaceholder="Search products..."

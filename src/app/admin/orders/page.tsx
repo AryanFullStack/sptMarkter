@@ -82,10 +82,14 @@ export default function OrdersManagementPage() {
     let filtered = orders;
 
     if (searchTerm) {
-      filtered = filtered.filter(order =>
-        order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.users?.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      filtered = filtered.filter(order => {
+        const user = Array.isArray(order.users) ? order.users[0] : order.users;
+        return (
+          order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user?.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      });
     }
 
     if (statusFilter !== "all") {
@@ -199,6 +203,7 @@ export default function OrdersManagementPage() {
                     <TableHead>Total</TableHead>
                     <TableHead>Paid</TableHead>
                     <TableHead>Pending</TableHead>
+                    <TableHead>Created</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -208,19 +213,40 @@ export default function OrdersManagementPage() {
                     <TableRow key={order.id}>
                       <TableCell className="font-mono">{order.order_number}</TableCell>
                       <TableCell>
-                        <div>
-                          <p className="font-medium">{order.users?.full_name || "N/A"}</p>
-                          <p className="text-sm text-[#6B6B6B]">{order.users?.email}</p>
-                        </div>
+                        {(() => {
+                          const user = Array.isArray(order.users) ? order.users[0] : order.users;
+                          return (
+                            <div>
+                              <p className="font-medium">{user?.full_name || "N/A"}</p>
+                              <p className="text-sm text-[#6B6B6B]">{user?.email}</p>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="capitalize">{order.users?.role?.replace("_", " ") || "N/A"}</Badge>
+                        <Badge variant="outline" className="capitalize">
+                          {(Array.isArray(order.users) ? order.users[0] : order.users)?.role?.replace("_", " ") || "N/A"}
+                        </Badge>
                       </TableCell>
                       <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
                       <TableCell>Rs. {order.total_amount?.toFixed(2)}</TableCell>
                       <TableCell>Rs. {order.paid_amount?.toFixed(2)}</TableCell>
                       <TableCell className="text-[#C77D2E]">
                         Rs. {(order.pending_amount || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        {order.recorded_by_user ? (
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{order.recorded_by_user.full_name}</span>
+                            <Badge variant="outline" className="text-[10px] w-fit capitalize bg-blue-50 text-blue-700 border-blue-100">
+                              {order.recorded_by_user.role?.replace("_", " ")}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] capitalize bg-gray-50 text-gray-600 border-gray-100">
+                            Customer
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
@@ -253,14 +279,14 @@ export default function OrdersManagementPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-[#D4AF37]"
+                              className="text-[#000000]"
                               onClick={() => {
                                 setSelectedOrder(order);
                                 setPaymentAmount(order.pending_amount);
                                 setIsPaymentOpen(true);
                               }}
                             >
-                              <DollarSign className="h-4 w-4" />
+                              Collect
                             </Button>
                           )}
                         </div>
@@ -312,20 +338,50 @@ export default function OrdersManagementPage() {
                 </div>
                 <div>
                   <Label>Customer</Label>
-                  <p>{selectedOrder.users?.full_name || "N/A"}</p>
-                  <p className="text-sm text-[#6B6B6B]">{selectedOrder.users?.email}</p>
+                  {(() => {
+                    const user = Array.isArray(selectedOrder.users) ? selectedOrder.users[0] : selectedOrder.users;
+                    return (
+                      <>
+                        <p>{user?.full_name || "N/A"}</p>
+                        <p className="text-sm text-[#6B6B6B]">{user?.email}</p>
+                        <Badge variant="outline" className="mt-1 capitalize">{user?.role?.replace("_", " ")}</Badge>
+                      </>
+                    );
+                  })()}
+                </div>
+                <div>
+                  <Label>Order Recorded By</Label>
+                  {selectedOrder.recorded_by_user ? (
+                    <div className="flex flex-col gap-1">
+                      <p className="font-medium text-[#1A1A1A]">{selectedOrder.recorded_by_user.full_name}</p>
+                      <Badge variant="secondary" className="w-fit capitalize bg-blue-50 text-blue-700 border-blue-100">
+                        {selectedOrder.recorded_by_user.role?.replace("_", " ")}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <Badge variant="outline" className="w-fit capitalize bg-green-50 text-green-700 border-green-100">
+                      Direct Customer Order
+                    </Badge>
+                  )}
                 </div>
                 <div>
                   <Label>Shipping Address</Label>
-                  {selectedOrder.shipping_address && (
+                  {selectedOrder.shipping_address && Object.keys(selectedOrder.shipping_address).length > 0 ? (
                     <div className="text-sm">
-                      <p>{selectedOrder.shipping_address.full_name}</p>
-                      <p>{selectedOrder.shipping_address.address_line1}</p>
-                      <p>{selectedOrder.shipping_address.city}, {selectedOrder.shipping_address.state}</p>
-                      <p>{selectedOrder.shipping_address.phone}</p>
+                      {selectedOrder.shipping_address.address_line1 ? (
+                        <>
+                          <p>{selectedOrder.shipping_address.full_name}</p>
+                          <p>{selectedOrder.shipping_address.address_line1}</p>
+                          <p>{selectedOrder.shipping_address.city}, {selectedOrder.shipping_address.state}</p>
+                          <p>{selectedOrder.shipping_address.phone}</p>
+                        </>
+                      ) : (
+                        <p className="text-gray-500 italic">Address data incomplete</p>
+                      )}
                     </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">No shipping address recorded</p>
                   )}
-
                 </div>
 
                 {/* Order Items List */}
