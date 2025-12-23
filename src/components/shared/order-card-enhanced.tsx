@@ -67,34 +67,21 @@ export function OrderCardEnhanced({
     };
 
     const getPaymentStatusBadge = () => {
-        const config = {
-            paid: {
-                icon: CheckCircle,
-                variant: "default" as const,
-                label: "Paid",
-                className: "bg-green-600 hover:bg-green-700",
-            },
-            partial: {
-                icon: Clock,
-                variant: "secondary" as const,
-                label: "Partial",
-                className: "bg-orange-500 hover:bg-orange-600 text-white",
-            },
-            pending: {
-                icon: AlertCircle,
-                variant: "outline" as const,
-                label: "Pending",
-                className: "border-red-500 text-red-700 hover:bg-red-50",
-            },
-        };
+        const isPaid = order.pending_amount <= 0;
 
-        const { icon: Icon, variant, label, className: badgeClassName } =
-            config[order.payment_status] || config.pending;
+        if (isPaid) {
+            return (
+                <Badge variant="default" className="gap-1 bg-green-600 hover:bg-green-700">
+                    <CheckCircle className="h-3 w-3" />
+                    Paid
+                </Badge>
+            );
+        }
 
         return (
-            <Badge variant={variant} className={cn("gap-1", badgeClassName)}>
-                <Icon className="h-3 w-3" />
-                {label}
+            <Badge variant="outline" className="gap-1 border-orange-500 text-orange-700 hover:bg-orange-50">
+                <AlertCircle className="h-3 w-3" />
+                Pending
             </Badge>
         );
     };
@@ -128,131 +115,80 @@ export function OrderCardEnhanced({
     }, {});
 
     return (
-        <Card className={cn("overflow-hidden hover:shadow-lg transition-shadow", className)}>
-            <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 pb-3">
-                <div className="flex items-start justify-between">
-                    <div className="space-y-2">
+        <Card className={cn("overflow-hidden hover:shadow-lg transition-shadow border-none shadow-sm", className)}>
+            <CardContent className="p-6 space-y-6">
+                {/* Top Section: ID & Date + Badges */}
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                            <Package className="h-5 w-5 text-[#2D5F3F]" />
-                            <span className="font-mono font-bold text-lg">{order.order_number}</span>
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-mono font-bold text-base">{order.order_number}</span>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Calendar className="h-4 w-4" />
+                            <Calendar className="h-3.5 w-3.5" />
                             {formatDate(order.created_at)}
                         </div>
                     </div>
-                    <div className="flex flex-col gap-2 items-end">
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
                         {getPaymentStatusBadge()}
                         {getOrderStatusBadge(order.status)}
                     </div>
                 </div>
 
-                {/* Created Via Attribution */}
-                {order.created_via === "salesman" && order.recorded_by_user && (
-                    <div className="mt-3 pt-3 border-t flex items-center gap-2 text-sm">
-                        <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-xs bg-blue-600 text-white">
-                                S
-                            </AvatarFallback>
-                        </Avatar>
-                        <span className="text-muted-foreground">
-                            Created by salesman <span className="font-medium text-foreground">{order.recorded_by_user.full_name}</span>
-                        </span>
-                    </div>
-                )}
-            </CardHeader>
-
-            <CardContent className="pt-4 space-y-4">
-                {/* Financial Summary */}
-                <div className="grid grid-cols-3 gap-3">
+                {/* Financial Summary - Horizontal Grid */}
+                <div className="grid grid-cols-3 gap-6 py-4 border-y border-gray-50 bg-gray-50/30 -mx-6 px-6">
                     <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Total</p>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total</p>
                         <p className="text-lg font-bold">{formatCurrency(order.total_amount)}</p>
                     </div>
+
                     <div className="space-y-1">
-                        <p className="text-xs text-green-700 dark:text-green-400">Paid</p>
+                        <p className="text-[10px] font-bold text-green-700 dark:text-green-400 uppercase tracking-widest">Paid</p>
                         <p className="text-lg font-bold text-green-600">{formatCurrency(order.paid_amount)}</p>
                     </div>
+
                     <div className="space-y-1">
-                        <p className="text-xs text-orange-700 dark:text-orange-400">Pending</p>
+                        <p className="text-[10px] font-bold text-orange-700 dark:text-orange-400 uppercase tracking-widest">Pending</p>
                         <p className="text-lg font-bold text-orange-600">{formatCurrency(order.pending_amount)}</p>
                     </div>
                 </div>
 
-                <Separator />
-
-                {/* Items Grouped by Brand */}
-                <div className="space-y-3">
-                    <p className="text-sm font-semibold">Order Items</p>
-                    {Object.entries(groupedItems).map(([brand, items]: [string, any]) => (
-                        <div key={brand} className="space-y-2">
-                            {brand !== "Other" && (
-                                <div className="flex items-center gap-2">
-                                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm font-medium">{brand}</span>
-                                </div>
-                            )}
-                            <div className="pl-6 space-y-1">
-                                {items.map((item: any, idx: number) => (
-                                    <div key={idx} className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">
-                                            {item.name || item.product_name} <span className="text-xs">x{item.quantity}</span>
-                                        </span>
-                                        <span className="font-medium">
-                                            {formatCurrency((item.price || item.unit_price) * item.quantity)}
-                                        </span>
-                                    </div>
-                                ))}
+                {/* Items */}
+                <div className="space-y-4">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[#A0A0A0]">Order Items</p>
+                    <div className="space-y-4">
+                        {order.items.map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-start border-b border-gray-50 pb-2 last:border-0">
+                                <p className="text-sm font-medium text-foreground leading-snug max-w-[70%]">
+                                    {item.name || item.product_name} <span className="text-muted-foreground lowercase text-xs">x{item.quantity}</span>
+                                </p>
+                                <p className="text-sm font-bold whitespace-nowrap">
+                                    {formatCurrency((item.price || item.unit_price) * item.quantity)}
+                                </p>
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
 
-                {/* Payment History (if enabled and has payments) */}
-                {showPaymentHistory && order.payments && order.payments.length > 0 && (
-                    <>
-                        <Separator />
-                        <div className="space-y-2">
-                            <p className="text-sm font-semibold">Recent Payments</p>
-                            <div className="space-y-1">
-                                {order.payments.slice(0, 3).map((payment) => (
-                                    <div key={payment.id} className="flex justify-between text-xs">
-                                        <span className="text-muted-foreground">
-                                            {formatDate(payment.created_at)} - {payment.payment_method}
-                                        </span>
-                                        <span className="font-medium text-green-600">
-                                            {formatCurrency(payment.amount)}
-                                        </span>
-                                    </div>
-                                ))}
-                                {order.payments.length > 3 && (
-                                    <p className="text-xs text-muted-foreground italic">
-                                        +{order.payments.length - 3} more payment{order.payments.length - 3 !== 1 ? "s" : ""}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </>
-                )}
-            </CardContent>
+                {/* Actions */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                    {onRecordPayment && order.pending_amount > 0 && (
+                        <Button
+                            size="lg"
+                            onClick={() => onRecordPayment(order.id)}
+                            className="flex-1 bg-[#1A1A1A] hover:bg-[#333333] text-white shadow-xl shadow-black/5 transition-all active:scale-[0.98] font-bold"
+                        >
+                            Record Payment
+                        </Button>
+                    )}
 
-            <CardFooter className="bg-gray-50 dark:bg-gray-900 flex gap-2">
-                {onViewDetails && (
-                    <Button variant="outline" size="sm" onClick={() => onViewDetails(order.id)} className="flex-1">
-                        View Details
-                    </Button>
-                )}
-                {onRecordPayment && order.payment_status !== "paid" && (
-                    <Button
-                        size="sm"
-                        onClick={() => onRecordPayment(order.id)}
-                        className="flex-1 bg-[#2D5F3F] hover:bg-[#234a32]"
-                    >
-                        <DollarSign className="h-4 w-4 mr-1" />
-                        Record Payment
-                    </Button>
-                )}
-            </CardFooter>
+                    {onViewDetails && (
+                        <Button variant="outline" size="lg" onClick={() => onViewDetails(order.id)} className="flex-1 font-semibold text-gray-600 hover:text-black hover:bg-gray-50">
+                            View Details
+                        </Button>
+                    )}
+                </div>
+            </CardContent>
         </Card>
     );
 }

@@ -415,10 +415,20 @@ export async function createOrderForClient(
       .select("id")
       .eq("salesman_id", user.id)
       .eq("shop_id", clientId)
-      .single();
+      .maybeSingle();
 
   if (!shopAssignment) {
-      return { error: "Unauthorized: You are not assigned to this shop. Please contact your administrator." };
+    // Fallback: Check legacy assignment on users table
+    const { data: legacyUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", clientId)
+        .eq("assigned_salesman_id", user.id)
+        .maybeSingle();
+
+    if (!legacyUser) {
+        return { error: "Unauthorized: You are not assigned to this shop. Please contact your administrator." };
+    }
   }
 
   // Verify brand assignment
