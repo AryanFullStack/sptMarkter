@@ -68,15 +68,21 @@ export function OrderInvoice({ order, onClose }: OrderInvoiceProps) {
                     </div>
                     <div>
                         <h3 className="font-bold underline mb-0.5">Ship To</h3>
-                        {shippingAddress ? (
+                        {shippingAddress && Object.keys(shippingAddress).length > 0 ? (
                             <div className="text-[9px]">
-                                <p>{shippingAddress.address_line1}</p>
-                                {shippingAddress.address_line2 && <p>{shippingAddress.address_line2}</p>}
-                                <p>{shippingAddress.city}, {shippingAddress.state}</p>
-                                <p>Tel: {shippingAddress.phone}</p>
+                                {shippingAddress.address_line1 ? (
+                                    <>
+                                        <p>{shippingAddress.address_line1}</p>
+                                        {shippingAddress.address_line2 && <p>{shippingAddress.address_line2}</p>}
+                                        <p>{shippingAddress.city}{shippingAddress.state ? `, ${shippingAddress.state}` : ''}</p>
+                                        <p>Tel: {shippingAddress.phone}</p>
+                                    </>
+                                ) : (
+                                    <p className="italic">Address details not fully recorded.</p>
+                                )}
                             </div>
                         ) : (
-                            <p className="italic">No address provided.</p>
+                            <p className="italic">No shipping address recorded.</p>
                         )}
                     </div>
                 </div>

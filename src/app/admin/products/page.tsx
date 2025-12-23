@@ -9,9 +9,10 @@ import { DataTable, Column } from "@/components/shared/data-table";
 import { ExportButton } from "@/components/shared/export-button";
 import { ProductForm } from "@/components/admin/product-form";
 import { Package, Plus, Edit, Trash2, Image as ImageIcon } from "lucide-react";
-import { formatCurrency, formatDate } from "@/utils/export-utils";
+import { formatDate, formatCurrency } from "@/utils/export-utils";
 import { deleteProduct } from "@/app/admin/actions";
 import { notify } from "@/lib/notifications";
+import { cn } from "@/lib/utils";
 
 interface Product {
   id: string;
@@ -36,6 +37,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [filter, setFilter] = useState<"all" | "low-stock" | "featured">("all");
 
   const supabase = createClient();
 
@@ -187,6 +189,12 @@ export default function ProductsPage() {
     featured: products.filter(p => p.is_featured).length,
   };
 
+  const filteredProducts = products.filter(p => {
+    if (filter === "low-stock") return (p.stock_quantity || 0) <= 10;
+    if (filter === "featured") return p.is_featured;
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -209,7 +217,13 @@ export default function ProductsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
+            filter === "all" && "ring-[#2D5F3F] bg-[#2D5F3F]/5 shadow-md"
+          )}
+          onClick={() => setFilter("all")}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[#6B6B6B]">
               Total Products
@@ -217,7 +231,7 @@ export default function ProductsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-[#D4AF37]" />
+              <Package className={cn("h-5 w-5", filter === "all" ? "text-[#1E4D2B]" : "text-[#D4AF37]")} />
               <span className="text-2xl font-bold text-[#1A1A1A]">
                 {stats.total}
               </span>
@@ -225,7 +239,13 @@ export default function ProductsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
+            filter === "low-stock" && "ring-[#8B3A3A] bg-[#8B3A3A]/5 shadow-md"
+          )}
+          onClick={() => setFilter(filter === "low-stock" ? "all" : "low-stock")}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[#6B6B6B]">
               Low Stock
@@ -233,15 +253,21 @@ export default function ProductsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-[#8B3A3A]" />
-              <span className="text-2xl font-bold text-[#8B3A3A]">
+              <Package className={cn("h-5 w-5", filter === "low-stock" ? "text-red-700" : "text-[#8B3A3A]")} />
+              <span className={cn("text-2xl font-bold", filter === "low-stock" ? "text-red-700" : "text-[#8B3A3A]")}>
                 {stats.lowStock}
               </span>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
+            filter === "featured" && "ring-[#D4AF37] bg-[#D4AF37]/5 shadow-md"
+          )}
+          onClick={() => setFilter(filter === "featured" ? "all" : "featured")}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[#6B6B6B]">
               Featured
@@ -249,8 +275,8 @@ export default function ProductsPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-[#D4AF37]" />
-              <span className="text-2xl font-bold text-[#D4AF37]">
+              <Package className={cn("h-5 w-5", filter === "featured" ? "text-yellow-700" : "text-[#D4AF37]")} />
+              <span className={cn("text-2xl font-bold", filter === "featured" ? "text-yellow-700" : "text-[#D4AF37]")}>
                 {stats.featured}
               </span>
             </div>
@@ -260,6 +286,21 @@ export default function ProductsPage() {
 
       {/* Products Table */}
       <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 border-b">
+          <CardTitle className="text-xl font-serif">
+            {filter === "low-stock" ? "Low Stock Items" : filter === "featured" ? "Featured Items" : "Product Catalog"}
+          </CardTitle>
+          {filter !== "all" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFilter("all")}
+              className="text-xs font-bold text-[#6B6B6B] hover:text-[#1A1A1A]"
+            >
+              Clear Filter
+            </Button>
+          )}
+        </CardHeader>
         <CardContent className="pt-6">
           {loading ? (
             <div className="text-center py-12 text-[#6B6B6B]">
@@ -267,7 +308,7 @@ export default function ProductsPage() {
             </div>
           ) : (
             <DataTable
-              data={products}
+              data={filteredProducts}
               columns={columns}
               searchable
               searchPlaceholder="Search products..."
