@@ -14,6 +14,7 @@ import { getAllSalesmen, assignSalesmanToBrands, updateSalesman, createSalesman,
 import { getAssignableShops, assignShopToSalesman, getSalesmanAssignedShops } from "@/app/actions/salesman-actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRouter } from "next/navigation";
 
@@ -362,8 +363,50 @@ export function SalesmanManagement() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <div className="space-y-2">
+                        <Skeleton className="h-8 w-48" />
+                        <Skeleton className="h-4 w-64" />
+                    </div>
+                    <Skeleton className="h-10 w-40" />
+                </div>
+                <div className="grid gap-4">
+                    {[1, 2, 3].map((i) => (
+                        <Card key={i}>
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <Skeleton className="h-6 w-32" />
+                                            <Skeleton className="h-5 w-20 rounded-full" />
+                                        </div>
+                                        <Skeleton className="h-4 w-40" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Skeleton className="h-8 w-20" />
+                                        <Skeleton className="h-8 w-20" />
+                                        <Skeleton className="h-8 w-20" />
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <Skeleton className="h-20 rounded-lg" />
+                                        <Skeleton className="h-20 rounded-lg" />
+                                    </div>
+                                    <Skeleton className="h-4 w-32" />
+                                    <div className="flex gap-2">
+                                        <Skeleton className="h-6 w-24 rounded-full" />
+                                        <Skeleton className="h-6 w-24 rounded-full" />
+                                    </div>
+                                    <Skeleton className="h-4 w-full" />
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
             </div>
         );
     }

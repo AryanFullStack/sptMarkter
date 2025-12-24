@@ -32,6 +32,7 @@ import {
     toggleBrandStatus
 } from "@/app/actions/brand-actions";
 import { Brand } from "@/types/custom";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function BrandsManager() {
     const [brands, setBrands] = useState<Brand[]>([]);
@@ -148,11 +149,28 @@ export function BrandsManager() {
                     </TableHeader>
                     <TableBody>
                         {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center">
-                                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#D4AF37]" />
-                                </TableCell>
-                            </TableRow>
+                            Array.from({ length: 5 }).map((_, i) => (
+                                <TableRow key={i}>
+                                    <TableCell>
+                                        <Skeleton className="h-8 w-8 rounded-md" />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Skeleton className="h-4 w-32" />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Skeleton className="h-4 w-24" />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Skeleton className="h-5 w-16 rounded-full" />
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <Skeleton className="h-8 w-8 rounded-md" />
+                                            <Skeleton className="h-8 w-8 rounded-md" />
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))
                         ) : filteredBrands.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={5} className="h-24 text-center text-gray-500">

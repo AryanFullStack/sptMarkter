@@ -59,7 +59,8 @@ export function ProductGrid({ products }: ProductGridProps) {
     };
 
     const handleAddToCart = (product: any) => {
-        addToCart(product, 1);
+        const price = getProductPrice(product);
+        addToCart(product, 1, price);
         notify.success("Added to cart!", `${product.name} added to your cart.`);
     };
 

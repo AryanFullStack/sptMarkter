@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { createClient } from "@/supabase/client";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function FindShopsPage() {
     const [query, setQuery] = useState("");
@@ -152,8 +153,24 @@ export default function FindShopsPage() {
                         </div>
 
                         {loading ? (
-                            <div className="flex justify-center py-20">
-                                <Loader2 className="h-10 w-10 animate-spin text-[#D4AF37]" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {[1, 2, 3, 4, 5, 6].map(i => (
+                                    <div key={i} className="bg-white border p-6 rounded-xl space-y-4">
+                                        <div className="flex justify-between">
+                                            <Skeleton className="h-10 w-10 rounded-xl" />
+                                            <Skeleton className="h-5 w-5 rounded-full" />
+                                        </div>
+                                        <Skeleton className="h-6 w-3/4" />
+                                        <div className="space-y-2">
+                                            <Skeleton className="h-4 w-full" />
+                                            <Skeleton className="h-4 w-2/3" />
+                                        </div>
+                                        <div className="pt-4 border-t flex items-center justify-between">
+                                            <Skeleton className="h-5 w-20 rounded-full" />
+                                            <Skeleton className="h-3 w-20" />
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -227,8 +244,24 @@ export default function FindShopsPage() {
 
                     {/* Global Results */}
                     {loading ? (
-                        <div className="flex justify-center py-20">
-                            <Loader2 className="h-10 w-10 animate-spin text-[#D4AF37]" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {[1, 2, 3, 4, 5, 6].map(i => (
+                                <div key={i} className="bg-white border p-5 rounded-xl flex flex-col justify-between h-40">
+                                    <div>
+                                        <div className="flex justify-between items-start mb-3">
+                                            <Skeleton className="h-6 w-32" />
+                                            <Skeleton className="h-5 w-20 rounded-full" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Skeleton className="h-4 w-full" />
+                                            <Skeleton className="h-4 w-2/3" />
+                                        </div>
+                                    </div>
+                                    <div className="border-t pt-4 flex justify-between">
+                                        <Skeleton className="h-3 w-24" />
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

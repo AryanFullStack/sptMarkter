@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createClient } from "@/supabase/client";
 
 interface CartItem {
     id: string;
@@ -15,7 +16,7 @@ interface CartItem {
 
 interface CartContextType {
     items: CartItem[];
-    addToCart: (product: any, quantity?: number) => void;
+    addToCart: (product: any, quantity?: number, price?: number) => void;
     removeFromCart: (productId: string) => void;
     updateQuantity: (productId: string, quantity: number) => void;
     clearCart: () => void;
@@ -25,15 +26,25 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+// Helper to determine price based on role
+const getProductPriceForRole = (product: any, role: string | null) => {
+    if (!product) return 0;
+    if (role === "beauty_parlor") {
+        return product.price_beauty_parlor || 0;
+    } else if (role === "retailer") {
+        return product.price_retailer || 0;
+    }
+    return product.price_customer || 0;
+};
+
 export function CartProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<CartItem[]>([]);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
+    const supabase = createClient();
 
     // Function to fetch current user's role
     const fetchUserRole = async () => {
-        const { createClient } = await import("@/supabase/client");
-        const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
         if (user) {
@@ -56,16 +67,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
 
         const initAuth = async () => {
-            const { createClient } = await import("@/supabase/client");
-            const supabase = createClient();
-
             // Initial role fetch
             const role = await fetchUserRole();
             setUserRole(role);
 
             // Set up auth state listener
             const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-                if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+                if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
                     const newRole = await fetchUserRole();
                     setUserRole(newRole);
                 }
@@ -93,9 +101,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const refreshCartPrices = async (role: string | null) => {
         try {
-            const { createClient } = await import("@/supabase/client");
-            const supabase = createClient();
-
             const productIds = items.map(item => item.product_id);
             if (productIds.length === 0) return;
 
@@ -108,12 +113,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 setItems(prevItems => prevItems.map(item => {
                     const product = products.find(p => p.id === item.product_id);
                     if (product) {
-                        let newPrice = product.price_customer || 0;
-                        if (role === "beauty_parlor") {
-                            newPrice = product.price_beauty_parlor || 0;
-                        } else if (role === "retailer") {
-                            newPrice = product.price_retailer || 0;
-                        }
+                        const newPrice = getProductPriceForRole(product, role);
                         return { ...item, price: newPrice };
                     }
                     return item;
@@ -131,17 +131,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
     }, [items, isLoaded]);
 
-    const addToCart = (product: any, quantity = 1) => {
+    const addToCart = (product: any, quantity = 1, price?: number) => {
         setItems((prevItems) => {
             const existingItem = prevItems.find((item) => item.product_id === product.id);
 
-            // Determine price based on user role
-            let activePrice = product.price_customer || 0;
-            if (userRole === "beauty_parlor") {
-                activePrice = product.price_beauty_parlor || 0;
-            } else if (userRole === "retailer") {
-                activePrice = product.price_retailer || 0;
-            }
+            // Determine price: use provided price, or calculate based on role
+            // Careful: if price is 0 provided (unlikely but possible), should we use it?
+            // Assuming strict check for undefined
+            let activePrice = price !== undefined ? price : getProductPriceForRole(product, userRole);
 
             if (existingItem) {
                 return prevItems.map((item) =>

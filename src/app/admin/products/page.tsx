@@ -13,6 +13,7 @@ import { formatDate, formatCurrency } from "@/utils/export-utils";
 import { deleteProduct } from "@/app/admin/actions";
 import { notify } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Product {
   id: string;
@@ -32,6 +33,7 @@ interface Product {
   category?: { name: string };
 }
 
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,29 +41,98 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [filter, setFilter] = useState<"all" | "low-stock" | "featured">("all");
 
+  // Pagination & Search State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stats, setStats] = useState({ total: 0, lowStock: 0, featured: 0 });
+
+  const ITEMS_PER_PAGE = 15;
   const supabase = createClient();
 
   useEffect(() => {
-    loadProducts();
+    loadStats();
   }, []);
 
-  async function loadProducts() {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("products")
-      .select(`
-        *,
-        brand:brands(name),
-        category:categories(name)
-      `)
-      .order("created_at", { ascending: false });
+  useEffect(() => {
+    loadProducts(currentPage, searchQuery, filter);
+  }, [currentPage, filter]); // Search is handled by debounce/enter separately
 
-    if (error) {
-      console.error("Error loading products:", error);
-    } else {
-      setProducts(data || []);
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (currentPage === 1) {
+        loadProducts(1, searchQuery, filter);
+      } else {
+        setCurrentPage(1); // will trigger above effect
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+
+  async function loadStats() {
+    try {
+      const [totalRes, lowStockRes, featuredRes] = await Promise.all([
+        supabase.from("products").select("id", { count: "exact", head: true }),
+        supabase.from("products").select("id", { count: "exact", head: true }).lte("stock_quantity", 10),
+        supabase.from("products").select("id", { count: "exact", head: true }).eq("is_featured", true)
+      ]);
+
+      setStats({
+        total: totalRes.count || 0,
+        lowStock: lowStockRes.count || 0,
+        featured: featuredRes.count || 0
+      });
+    } catch (e) {
+      console.error("Error loading stats", e);
     }
-    setLoading(false);
+  }
+
+  async function loadProducts(page: number, search: string, activeFilter: string) {
+    setLoading(true);
+    try {
+      const from = (page - 1) * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
+      let query = supabase
+        .from("products")
+        .select(`
+            *,
+            brand:brands(name),
+            category:categories(name)
+          `, { count: "exact" });
+
+      // Apply filters
+      if (activeFilter === "low-stock") {
+        query = query.lte("stock_quantity", 10);
+      } else if (activeFilter === "featured") {
+        query = query.eq("is_featured", true);
+      }
+
+      // Apply search
+      if (search) {
+        query = query.ilike("name", `%${search}%`);
+      }
+
+      const { data, count, error } = await query
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+
+      setProducts(data || []);
+      if (count !== null) {
+        setTotalItems(count);
+        setTotalPages(Math.ceil(count / ITEMS_PER_PAGE));
+      }
+    } catch (error) {
+      console.error("Error loading products:", error);
+      notify.error("Error", "Failed to load products");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const handleDelete = async (productId: string) => {
@@ -70,7 +141,8 @@ export default function ProductsPage() {
     try {
       await deleteProduct(productId);
       notify.success("Product Deleted", "Product has been successfully deleted from the catalog.");
-      loadProducts();
+      loadProducts(currentPage, searchQuery, filter);
+      loadStats(); // Refresh stats
     } catch (error: any) {
       console.error("Error deleting product:", error);
       notify.error("Error", error.message || "Failed to delete product");
@@ -85,7 +157,18 @@ export default function ProductsPage() {
   const handleFormClose = () => {
     setShowForm(false);
     setEditingProduct(null);
-    loadProducts();
+    loadProducts(currentPage, searchQuery, filter);
+    loadStats();
+  };
+
+  const handleFilterChange = (newFilter: "all" | "low-stock" | "featured") => {
+    if (filter === newFilter) {
+      setFilter("all"); // Toggle off
+      setCurrentPage(1);
+    } else {
+      setFilter(newFilter);
+      setCurrentPage(1);
+    }
   };
 
   const columns: Column<Product>[] = [
@@ -109,7 +192,7 @@ export default function ProductsPage() {
     {
       key: "name",
       header: "Product",
-      sortable: true,
+      sortable: false, // Server side sort not impl for this column yet
       render: (product) => (
         <div>
           <p className="font-medium text-[#1A1A1A]">{product.name}</p>
@@ -141,7 +224,7 @@ export default function ProductsPage() {
     {
       key: "stock_quantity",
       header: "Stock",
-      sortable: true,
+      sortable: false,
       render: (product) => {
         const stock = product.stock_quantity || 0;
         const stockClass = stock <= 10 ? "text-[#8B3A3A]" : stock <= 50 ? "text-[#C77D2E]" : "text-[#2D5F3F]";
@@ -183,18 +266,6 @@ export default function ProductsPage() {
     },
   ];
 
-  const stats = {
-    total: products.length,
-    lowStock: products.filter(p => (p.stock_quantity || 0) <= 10).length,
-    featured: products.filter(p => p.is_featured).length,
-  };
-
-  const filteredProducts = products.filter(p => {
-    if (filter === "low-stock") return (p.stock_quantity || 0) <= 10;
-    if (filter === "featured") return p.is_featured;
-    return true;
-  });
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -222,7 +293,7 @@ export default function ProductsPage() {
             "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
             filter === "all" && "ring-[#2D5F3F] bg-[#2D5F3F]/5 shadow-md"
           )}
-          onClick={() => setFilter("all")}
+          onClick={() => handleFilterChange("all")}
         >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[#6B6B6B]">
@@ -244,7 +315,7 @@ export default function ProductsPage() {
             "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
             filter === "low-stock" && "ring-[#8B3A3A] bg-[#8B3A3A]/5 shadow-md"
           )}
-          onClick={() => setFilter(filter === "low-stock" ? "all" : "low-stock")}
+          onClick={() => handleFilterChange("low-stock")}
         >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[#6B6B6B]">
@@ -266,7 +337,7 @@ export default function ProductsPage() {
             "cursor-pointer transition-all hover:shadow-md ring-2 ring-transparent",
             filter === "featured" && "ring-[#D4AF37] bg-[#D4AF37]/5 shadow-md"
           )}
-          onClick={() => setFilter(filter === "featured" ? "all" : "featured")}
+          onClick={() => handleFilterChange("featured")}
         >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-[#6B6B6B]">
@@ -290,30 +361,111 @@ export default function ProductsPage() {
           <CardTitle className="text-xl font-serif">
             {filter === "low-stock" ? "Low Stock Items" : filter === "featured" ? "Featured Items" : "Product Catalog"}
           </CardTitle>
-          {filter !== "all" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setFilter("all")}
-              className="text-xs font-bold text-[#6B6B6B] hover:text-[#1A1A1A]"
-            >
-              Clear Filter
-            </Button>
-          )}
+          <div className="flex items-center gap-4">
+            {/* Search Input */}
+            <div className="relative w-64">
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-[#D4AF37]"
+              />
+              <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+            </div>
+            {filter !== "all" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleFilterChange("all")}
+                className="text-xs font-bold text-[#6B6B6B] hover:text-[#1A1A1A]"
+              >
+                Clear Filter
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pt-6">
           {loading ? (
-            <div className="text-center py-12 text-[#6B6B6B]">
-              Loading products...
+            <div className="border border-[#E8E8E8] rounded-lg overflow-hidden">
+              <div className="grid grid-cols-6 gap-4 p-4 bg-[#F7F5F2] border-b">
+                {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-4 w-20" />)}
+              </div>
+              <div className="divide-y">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="grid grid-cols-6 gap-4 p-4 items-center">
+                    <Skeleton className="h-16 w-16 rounded-lg" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                    <div className="space-y-1">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                      <Skeleton className="h-8 w-8 rounded-md" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <DataTable
-              data={filteredProducts}
-              columns={columns}
-              searchable
-              searchPlaceholder="Search products..."
-              emptyMessage="No products found"
-            />
+            <>
+              <DataTable
+                data={products}
+                columns={columns}
+                searchable={false} // usage controlled externally
+                emptyMessage="No products found"
+              />
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-end gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-[#6B6B6B]">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

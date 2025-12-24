@@ -17,6 +17,17 @@ export default async function ProductDetailPage({
   params: { slug: string };
 }) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let userRole = 'customer';
+  if (user) {
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    userRole = userData?.role || 'customer';
+  }
 
   // Fetch product by slug
   const { data: product, error } = await supabase
@@ -39,6 +50,14 @@ export default async function ProductDetailPage({
 
   if (error || !product) {
     notFound();
+  }
+
+  // Determine active price
+  let activePrice = product.price_customer || 0;
+  if (userRole === "beauty_parlor") {
+    activePrice = product.price_beauty_parlor || 0;
+  } else if (userRole === "retailer") {
+    activePrice = product.price_retailer || 0;
   }
 
   // Fetch related products (same category)
@@ -159,7 +178,7 @@ export default async function ProductDetailPage({
 
             {/* Actions */}
             <div className="space-y-3 pt-4">
-              <AddToCartButton product={product} />
+              <AddToCartButton product={product} price={activePrice} />
               <WishlistButton product={product} className="w-full" />
             </div>
 

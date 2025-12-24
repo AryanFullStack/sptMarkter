@@ -23,6 +23,7 @@ import {
   Warehouse,
   ShieldCheck
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -286,12 +287,44 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-        <div className="relative">
-          <div className="w-20 h-20 border-4 border-[#F7F5F2] rounded-full" />
-          <div className="w-20 h-20 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin absolute top-0" />
+      <div className="space-y-10 pb-20">
+        {/* Header Skeleton */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#E8E8E8] pb-8">
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-6 w-48" />
+          </div>
+          <div className="flex gap-3">
+            <Skeleton className="h-11 w-32" />
+            <Skeleton className="h-11 w-32" />
+          </div>
         </div>
-        <p className="text-[#6B6B6B] font-serif italic animate-pulse">Gathering business intelligence...</p>
+
+        {/* Tabs Skeleton */}
+        <div className="border-b border-[#E8E8E8] pb-1">
+          <div className="flex gap-8">
+            {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-8 w-24" />)}
+          </div>
+        </div>
+
+        {/* KPI Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map(i => (
+            <Skeleton key={i} className="h-40 rounded-xl" />
+          ))}
+        </div>
+
+        {/* Main Grid Skeleton */}
+        <div className="grid lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-8">
+            <Skeleton className="h-[500px] rounded-xl" />
+            <Skeleton className="h-[400px] rounded-xl" />
+          </div>
+          <div className="space-y-8">
+            <Skeleton className="h-[300px] rounded-xl" />
+            <Skeleton className="h-[400px] rounded-xl" />
+          </div>
+        </div>
       </div>
     );
   }

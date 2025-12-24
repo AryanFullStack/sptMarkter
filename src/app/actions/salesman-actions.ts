@@ -284,7 +284,8 @@ export async function getClientFinancialStatus(clientId: string) {
       pending_amount,
       payment_status,
       status,
-      created_at
+      created_at,
+      payments (*)
     `)
     .eq("user_id", clientId)
     .neq("status", "cancelled")

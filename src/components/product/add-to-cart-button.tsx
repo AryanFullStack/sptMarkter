@@ -9,14 +9,15 @@ import { notify } from "@/lib/notifications";
 interface AddToCartButtonProps {
     product: any;
     className?: string;
+    price?: number;
 }
 
-export function AddToCartButton({ product, className = "" }: AddToCartButtonProps) {
+export function AddToCartButton({ product, className = "", price }: AddToCartButtonProps) {
     const [quantity, setQuantity] = useState(1);
     const { addToCart } = useCart();
 
     const handleAddToCart = () => {
-        addToCart(product, quantity);
+        addToCart(product, quantity, price);
         notify.success("Added to cart!", `${product.name} (${quantity}x) added to your cart.`);
         setQuantity(1);
     };
