@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/supabase/admin";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 export async function getBrands() {
   const supabase = createAdminClient();
@@ -43,6 +43,7 @@ export async function createBrand(formData: FormData) {
   }
 
   revalidatePath("/admin");
+  revalidateTag("brands");
   return { success: true };
 }
 
@@ -71,6 +72,7 @@ export async function updateBrand(id: string, formData: FormData) {
   }
 
   revalidatePath("/admin");
+  revalidateTag("brands");
   return { success: true };
 }
 
@@ -108,6 +110,7 @@ export async function deleteBrand(id: string) {
   }
 
   revalidatePath("/admin");
+  revalidateTag("brands");
   return { success: true };
 }
 
@@ -124,5 +127,6 @@ export async function toggleBrandStatus(id: string, currentStatus: boolean) {
     return { error: error.message };
   }
   revalidatePath("/admin");
+  revalidateTag("brands");
   return { success: true };
 }

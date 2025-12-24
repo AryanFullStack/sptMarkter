@@ -201,7 +201,10 @@ export default function CheckoutPage() {
 
       console.log("Creating order with payload:", orderPayload);
 
-      const result = await placeOrderAction(orderPayload, items);
+      // Determine initial payment amount if user chose partial payment
+      const initialPayment = paymentMethod === "partial" ? partialAmount : undefined;
+
+      const result = await placeOrderAction(orderPayload, items, initialPayment);
 
       if (result.error) {
         console.error("=== Order Creation Error ===", result.error);
@@ -364,15 +367,15 @@ export default function CheckoutPage() {
                         <Label htmlFor="partial" className="flex-1 cursor-pointer">
                           <div className="space-y-3">
                             <div>
-                              <p className="font-semibold">Partial Payment (Credit)</p>
+                              <p className="font-semibold">Payment Schedule</p>
                               <p className="text-sm text-gray-600">
-                                Pay part now, rest will be marked as pending balance
+                                Choose how much to pay on delivery - from Rs. 0 to full amount
                               </p>
                             </div>
                             {paymentMethod === "partial" && (
                               <div>
                                 <Label htmlFor="partialAmount" className="text-sm">
-                                  Amount to Pay Now
+                                  Amount to Pay on Delivery
                                 </Label>
                                 <Input
                                   id="partialAmount"
@@ -382,15 +385,18 @@ export default function CheckoutPage() {
                                   value={partialAmount}
                                   onChange={(e) => setPartialAmount(Number(e.target.value))}
                                   className="mt-1"
+                                  placeholder="Enter amount (0 to full)"
                                 />
-                                {(partialAmount <= 0 || partialAmount >= total) && (
+                                {partialAmount < 0 || partialAmount > total ? (
                                   <p className="text-xs text-red-500 mt-1">
-                                    Please enter an amount between 1 and {total - 1}
+                                    Amount must be between 0 and {total}
+                                  </p>
+                                ) : (
+                                  <p className="text-sm text-gray-600 mt-2">
+                                    Will be collected: Rs. {partialAmount.toLocaleString()}<br />
+                                    Will be pending: Rs. {(total - partialAmount).toLocaleString()}
                                   </p>
                                 )}
-                                <p className="text-sm text-gray-600 mt-2">
-                                  Pending: Rs. {(total - partialAmount).toLocaleString()}
-                                </p>
                               </div>
                             )}
                           </div>
@@ -408,7 +414,7 @@ export default function CheckoutPage() {
                   </Button>
                   <Button
                     onClick={() => setStep(3)}
-                    disabled={paymentMethod === "partial" && (partialAmount <= 0 || partialAmount >= total)}
+                    disabled={paymentMethod === "partial" && (partialAmount < 0 || partialAmount > total)}
                     className="flex-1 bg-[#D4AF37] hover:bg-[#B8941F]"
                   >
                     Review Order

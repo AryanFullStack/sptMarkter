@@ -52,10 +52,7 @@ export default function Navbar() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    setUser(null);
-    setUserRole(null);
-    router.push("/");
-    router.refresh();
+    window.location.href = "/";
   }
 
   const getDashboardLink = () => {

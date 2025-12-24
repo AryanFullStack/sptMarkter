@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { getSalesmanDashboardData, getOrderDetails, getSalesmanRouteToday, getSalesmanAssignedShops } from "@/app/actions/salesman-actions";
+import { getUpcomingPayments, getOverduePayments } from "@/app/actions/payment-schedule-actions";
 import { notify } from "@/lib/notifications";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -18,6 +19,8 @@ export default function SalesmanOverview() {
     const [data, setData] = useState<any>(null);
     const [todayRoute, setTodayRoute] = useState<any[]>([]);
     const [weeklySchedule, setWeeklySchedule] = useState<any[]>([]);
+    const [upcomingPayments, setUpcomingPayments] = useState<any[]>([]);
+    const [overduePayments, setOverduePayments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -32,14 +35,18 @@ export default function SalesmanOverview() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                const [dashboardData, routeData, scheduleData] = await Promise.all([
+                const [dashboardData, routeData, scheduleData, upcomingRes, overdueRes] = await Promise.all([
                     getSalesmanDashboardData(user.id),
                     getSalesmanRouteToday(user.id),
-                    getSalesmanAssignedShops(user.id)
+                    getSalesmanAssignedShops(user.id),
+                    getUpcomingPayments(user.id, "salesman"),
+                    getOverduePayments(user.id, "salesman")
                 ]);
                 setData(dashboardData);
                 setTodayRoute(routeData.route || []);
                 setWeeklySchedule(scheduleData.shops || []);
+                setUpcomingPayments(upcomingRes.payments || []);
+                setOverduePayments(overdueRes.payments || []);
             }
         } catch (e) {
             notify.error("Error", "Failed to load dashboard data");
@@ -92,6 +99,73 @@ export default function SalesmanOverview() {
                     </Button>
                 </Link>
             </div>
+
+            {/* Payment Alerts Section */}
+            {(upcomingPayments.length > 0 || overduePayments.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-top-4">
+                    {overduePayments.length > 0 && (
+                        <Card className="border-l-4 border-l-red-500 shadow-md bg-red-50/50">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-red-600 font-bold flex items-center gap-2">
+                                    <Clock className="h-5 w-5" /> Overdue Payments
+                                </CardTitle>
+                                <CardDescription>These payments are past their due date!</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <ScrollArea className="h-48">
+                                    <div className="space-y-3 pr-4">
+                                        {overduePayments.map((p: any) => (
+                                            <div key={p.id} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm flex justify-between items-center group cursor-pointer hover:border-red-300 transition-all" onClick={() => handleViewDetails(p.id)}>
+                                                <div>
+                                                    <p className="font-bold text-[#1A1A1A]">{p.user?.full_name}</p>
+                                                    <p className="text-xs text-red-500 font-semibold">
+                                                        Due: {new Date(p.pending_payment_due_date || p.initial_payment_due_date).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-bold text-red-600">Rs. {Number(p.pending_amount || p.initial_payment_required).toLocaleString()}</p>
+                                                    <Badge variant="destructive" className="text-[10px]">OVERDUE</Badge>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </ScrollArea>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {upcomingPayments.length > 0 && (
+                        <Card className="border-l-4 border-l-[#D4AF37] shadow-md bg-[#D4AF37]/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-[#D4AF37] font-bold flex items-center gap-2">
+                                    <Calendar className="h-5 w-5" /> Upcoming Payments
+                                </CardTitle>
+                                <CardDescription>Payments due in the next 30 days</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <ScrollArea className="h-48">
+                                    <div className="space-y-3 pr-4">
+                                        {upcomingPayments.map((p: any) => (
+                                            <div key={p.id} className="bg-white p-3 rounded-lg border border-[#D4AF37]/20 shadow-sm flex justify-between items-center group cursor-pointer hover:border-[#D4AF37] transition-all" onClick={() => handleViewDetails(p.id)}>
+                                                <div>
+                                                    <p className="font-bold text-[#1A1A1A]">{p.user?.full_name}</p>
+                                                    <p className="text-xs text-[#6B6B6B]">
+                                                        Due: {new Date(p.pending_payment_due_date || p.initial_payment_due_date).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-bold text-[#1A1A1A]">Rs. {Number(p.pending_amount || p.initial_payment_required).toLocaleString()}</p>
+                                                    <Badge variant="outline" className="text-[10px] border-[#D4AF37] text-[#D4AF37]">UPCOMING</Badge>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </ScrollArea>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+            )}
 
             {/* Today's Route Section */}
             {todayRoute.length > 0 && (

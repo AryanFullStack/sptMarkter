@@ -272,7 +272,8 @@ export async function getClientFinancialStatus(clientId: string) {
     return { error: "Shop not found or invalid role" };
   }
 
-  // Get all orders (not cancelled)
+  // Get PENDING orders only (optimization: don't fetch history)
+  // We only need checking limit usage and displaying pending orders
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
     .select(`
@@ -287,19 +288,15 @@ export async function getClientFinancialStatus(clientId: string) {
     `)
     .eq("user_id", clientId)
     .neq("status", "cancelled")
+    .neq("payment_status", "paid") // <--- KEY OPTIMIZATION
     .order("created_at", { ascending: false });
 
   if (ordersError) {
     return { error: "Failed to fetch orders" };
   }
 
-  // Calculate totals
-  const totalLifetimeValue = orders?.reduce((sum, order) => sum + Number(order.total_amount || 0), 0) || 0;
-  const totalPaid = orders?.reduce((sum, order) => sum + Number(order.paid_amount || 0), 0) || 0;
-  const currentPending = orders?.reduce(
-    (sum, order) => order.payment_status !== "paid" ? sum + Number(order.pending_amount || 0) : sum,
-    0
-  ) || 0;
+  // Calculate pending total
+  const currentPending = orders?.reduce((sum, order) => sum + Number(order.pending_amount || 0), 0) || 0;
 
   const pendingLimit = Number(user.pending_amount_limit || 0);
   const remainingLimit = Math.max(0, pendingLimit - currentPending);
@@ -308,8 +305,8 @@ export async function getClientFinancialStatus(clientId: string) {
     user,
     orders,
     financialSummary: {
-      totalLifetimeValue,
-      totalPaid,
+      totalLifetimeValue: 0, // Unused
+      totalPaid: 0,          // Unused
       currentPending,
       pendingLimit,
       remainingLimit,
@@ -386,7 +383,8 @@ export async function createOrderForClient(
   items: any[],
   paidAmount: number,
   brandId: string, // NEW: Added brandId
-  notes?: string
+  notes?: string,
+  initialPaymentAmount?: number  // NEW: Optional initial payment for flexible split
 ) {
   const supabaseAuth = await createClient();
   const {
@@ -409,7 +407,8 @@ export async function createOrderForClient(
     return { error: "Unauthorized: Salesman access required" };
   }
 
-  // Verify Shop Assignment
+  // Verify Shop Assignment (RELAXED: Allowed for all active shops)
+  /*
   const { data: shopAssignment } = await supabase
       .from("salesman_shop_assignments")
       .select("id")
@@ -420,6 +419,7 @@ export async function createOrderForClient(
   if (!shopAssignment) {
       return { error: "Unauthorized: You are not assigned to this shop. Please contact your administrator." };
   }
+  */
 
   // Verify brand assignment
   if (brandId) {
@@ -468,25 +468,42 @@ export async function createOrderForClient(
   // Generate order number
   const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
+  // Handle flexible payment split if specified
+  let orderPayload: any = {
+    order_number: orderNumber,
+    user_id: clientId,
+    status: "created",
+    items: items,
+    subtotal,
+    total_amount: totalAmount,
+    paid_amount: paidAmount,
+    pending_amount: pendingAmount,
+    payment_status: paidAmount >= totalAmount ? "paid" : paidAmount > 0 ? "partial" : "pending",
+    shipping_address: {}, 
+    recorded_by: user.id,
+    created_via: "salesman",
+    notes: notes ? `${notes} (Brand ID: ${brandId})` : `Order created by salesman (Brand ID: ${brandId})`,
+  };
+
+  // If initial payment amount specified, apply split payment logic
+  if (typeof initialPaymentAmount === 'number') {
+    if (initialPaymentAmount < 0 || initialPaymentAmount > totalAmount) {
+      return { error: "Initial payment amount must be between 0 and total amount" };
+    }
+    
+    orderPayload = {
+      ...orderPayload,
+      initial_payment_required: initialPaymentAmount,
+      initial_payment_status: 'not_collected',
+      paid_amount: 0,  // Override - not collected yet
+      pending_amount: totalAmount  // Full amount pending until initial payment collected
+    };
+  }
+
   // Create order
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .insert({
-      order_number: orderNumber,
-      user_id: clientId,
-      status: "created",
-      items: items,
-      subtotal,
-      total_amount: totalAmount,
-      paid_amount: paidAmount,
-      pending_amount: pendingAmount,
-      payment_status: paidAmount >= totalAmount ? "paid" : paidAmount > 0 ? "partial" : "pending",
-      shipping_address: {}, 
-      recorded_by: user.id,
-      created_via: "salesman",
-      // brand_id: brandId, // TEMPORARY FIX: Commented out until DB schema is updated. See notes below.
-      notes: notes ? `${notes} (Brand ID: ${brandId})` : `Order created by salesman (Brand ID: ${brandId})`,
-    })
+    .insert(orderPayload)
     .select()
     .single();
 
@@ -683,38 +700,18 @@ export async function getSalesmanDashboardData(salesmanId: string) {
   // Get assigned brands
   const brands = await getAssignedBrands(salesmanId);
 
-  // Get ALL orders to calculate accurate stats
+  // Get recent orders for stats (limit to 100 for performance)
   const { data: allOrders } = await supabase
     .from("orders")
-    .select(`
-      id,
-      user_id,
-      total_amount,
-      paid_amount,
-      pending_amount,
-      notes,
-      created_at
-    `)
-    .eq("recorded_by", salesmanId);
+    .select("id, user_id, total_amount, paid_amount, pending_amount, notes, created_at")
+    .eq("recorded_by", salesmanId)
+    .order("created_at", { ascending: false })
+    .limit(100);
 
-  // Get recent 10 orders for the list
+  // Get recent 10 orders for display with user details
   const { data: recentOrders } = await supabase
     .from("orders")
-    .select(`
-      id,
-      order_number,
-      total_amount,
-      paid_amount,
-      pending_amount,
-      payment_status,
-      status,
-      created_at,
-      user:user_id (
-        id,
-        full_name,
-        email
-      )
-    `)
+    .select("id, order_number, total_amount, paid_amount, pending_amount, payment_status, status, created_at, user:user_id(id, full_name, email)")
     .eq("recorded_by", salesmanId)
     .order("created_at", { ascending: false })
     .limit(10);

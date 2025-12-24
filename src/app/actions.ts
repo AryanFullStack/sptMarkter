@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "../supabase/server";
 import { createAdminClient } from "../supabase/admin";
+import { revalidateTag } from "next/cache";
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
@@ -307,10 +308,10 @@ export const resetPasswordAction = async (formData: FormData) => {
 export const signOutAction = async () => {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  return redirect("/sign-in");
+  return redirect("/");
 };
 
-export const placeOrderAction = async (orderPayload: any, items: any[]) => {
+export const placeOrderAction = async (orderPayload: any, items: any[], initialPaymentAmount?: number) => {
   try {
     const supabase = createAdminClient();
     
@@ -335,11 +336,31 @@ export const placeOrderAction = async (orderPayload: any, items: any[]) => {
         }
     }
     
+    // Handle flexible payment split if specified
+    let finalOrderData = { ...orderData };
+    
+    if (typeof initialPaymentAmount === 'number') {
+      // Validate initial payment amount
+      if (initialPaymentAmount < 0 || initialPaymentAmount > Number(orderData.total_amount)) {
+        return { error: "Initial payment amount must be between 0 and total amount" };
+      }
+      
+      // Set payment split fields
+      finalOrderData = {
+        ...finalOrderData,
+        initial_payment_required: initialPaymentAmount,
+        initial_payment_status: 'not_collected',
+        created_via: 'self_order',
+        paid_amount: 0,
+        pending_amount: orderData.total_amount
+      };
+    }
+    
     // 1. Insert Order
-    console.log("ServerAction: Inserting order...", orderData.order_number);
+    console.log("ServerAction: Inserting order...", finalOrderData.order_number);
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .insert(orderData)
+      .insert(finalOrderData)
       .select()
       .single();
 
@@ -442,6 +463,8 @@ export const placeOrderAction = async (orderPayload: any, items: any[]) => {
         }
     }
 
+    revalidateTag("orders");
+    revalidateTag("dashboard");
     return { success: true, orderId: order.id };
   } catch (err: any) {
     console.error("Server Action: Unexpected error:", err);

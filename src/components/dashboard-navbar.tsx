@@ -34,7 +34,7 @@ export default function DashboardNavbar() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={async () => {
                 await supabase.auth.signOut()
-                router.refresh()
+                window.location.href = "/"
               }}>
                 Sign out
               </DropdownMenuItem>

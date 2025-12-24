@@ -1,9 +1,9 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle, TrendingUp, DollarSign } from "lucide-react";
+import { AlertCircle, CheckCircle, TrendingUp, DollarSign, Wallet, ShieldCheck, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FinancialSummaryCardProps {
@@ -24,42 +24,34 @@ export function FinancialSummaryCard({
     const remainingLimit = Math.max(0, pendingLimit - totalPending);
     const limitUsagePercentage = pendingLimit > 0 ? (totalPending / pendingLimit) * 100 : 0;
 
-    const getStatusColor = () => {
-        if (limitUsagePercentage >= 100) return "text-red-600";
-        if (limitUsagePercentage >= 80) return "text-orange-600";
-        return "text-green-600";
+    const getStatusTheme = () => {
+        if (limitUsagePercentage >= 100) return {
+            text: "text-red-600",
+            bg: "bg-red-50",
+            border: "border-red-100",
+            gradient: "from-red-500 to-rose-600",
+            icon: AlertCircle,
+            label: "Limit Exceeded"
+        };
+        if (limitUsagePercentage >= 80) return {
+            text: "text-orange-600",
+            bg: "bg-orange-50",
+            border: "border-orange-100",
+            gradient: "from-orange-400 to-amber-600",
+            icon: AlertCircle,
+            label: "Approaching Limit"
+        };
+        return {
+            text: "text-emerald-600",
+            bg: "bg-emerald-50",
+            border: "border-emerald-100",
+            gradient: "from-emerald-400 to-teal-600",
+            icon: ShieldCheck,
+            label: "Within Limit"
+        };
     };
 
-    const getStatusBadge = () => {
-        if (limitUsagePercentage >= 100) {
-            return (
-                <Badge variant="destructive" className="gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    Limit Exceeded
-                </Badge>
-            );
-        }
-        if (limitUsagePercentage >= 80) {
-            return (
-                <Badge variant="outline" className="gap-1 border-orange-500 text-orange-700">
-                    <AlertCircle className="h-3 w-3" />
-                    Approaching Limit
-                </Badge>
-            );
-        }
-        return (
-            <Badge variant="outline" className="gap-1 border-green-500 text-green-700">
-                <CheckCircle className="h-3 w-3" />
-                Within Limit
-            </Badge>
-        );
-    };
-
-    const getProgressColor = () => {
-        if (limitUsagePercentage >= 100) return "bg-red-600";
-        if (limitUsagePercentage >= 80) return "bg-orange-500";
-        return "bg-green-600";
-    };
+    const theme = getStatusTheme();
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("en-PK", {
@@ -67,94 +59,97 @@ export function FinancialSummaryCard({
             currency: "PKR",
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
-        }).format(amount);
+        }).format(amount).replace("PKR", "Rs.");
     };
 
     return (
-        <Card className={cn("overflow-hidden", className)}>
-            <CardHeader className="bg-gradient-to-r from-[#2D5F3F]/5 to-[#2D5F3F]/10 border-b">
-                <div className="flex items-center justify-between">
-                    <CardTitle className="font-serif text-xl flex items-center gap-2">
-                        <DollarSign className="h-5 w-5 text-[#2D5F3F]" />
-                        Financial Summary
-                    </CardTitle>
-                    {getStatusBadge()}
-                </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-6">
-                {/* Pending Amount */}
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-muted-foreground">Current Pending</span>
-                        <span className={cn("text-2xl font-bold", getStatusColor())}>
-                            {formatCurrency(totalPending)}
-                        </span>
+        <Card className={cn("overflow-hidden border-none shadow-xl bg-white", className)}>
+            <CardContent className="p-0">
+                <div className="p-6 lg:p-10 space-y-8">
+                    {/* Header Row */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                        <div className="space-y-1.5">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.25em]">Strategic Oversight</p>
+                            <h2 className="font-serif text-3xl lg:text-4xl font-bold text-[#1A1A1A]">Financial Standing</h2>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <Badge className={cn("px-5 py-2 rounded-full border-none shadow-sm font-bold text-[10px] uppercase tracking-widest leading-none", theme.bg, theme.text)}>
+                                <theme.icon className="h-4 w-4 mr-2" />
+                                {theme.label}
+                            </Badge>
+                        </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Pending Limit: {formatCurrency(pendingLimit)}</span>
-                        <span className={getStatusColor()}>
-                            {limitUsagePercentage.toFixed(1)}% used
-                        </span>
-                    </div>
-                    <Progress
-                        value={Math.min(limitUsagePercentage, 100)}
-                        className={cn("h-2 transition-all duration-500", "[&>div]:".concat(getProgressColor()))}
-                    />
-                </div>
 
-                {/* Available Limit */}
-                <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                                Available Credit Limit
-                            </p>
-                            <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                                {formatCurrency(remainingLimit)}
+                    {/* Main Stats and Progress */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                        <div className="lg:col-span-5 space-y-2">
+                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Currently Utilized</p>
+                            <p className={cn("text-5xl lg:text-6xl font-black tracking-tighter", theme.text)}>
+                                {formatCurrency(totalPending)}
                             </p>
                         </div>
-                        <TrendingUp className="h-8 w-8 text-blue-500 opacity-50" />
+
+                        <div className="lg:col-span-7 space-y-5">
+                            <div className="flex justify-between items-end">
+                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-60">Usage Intensity</p>
+                                <p className={cn("text-2xl font-black tracking-tight", theme.text)}>
+                                    {limitUsagePercentage.toFixed(1)}%
+                                </p>
+                            </div>
+
+                            <div className="relative h-6 w-full bg-gray-100/80 rounded-2xl overflow-hidden shadow-inner border border-gray-200/50">
+                                <div
+                                    className={cn("h-full transition-all duration-[1500ms] ease-in-out bg-gradient-to-r relative", theme.gradient)}
+                                    style={{ width: `${Math.min(limitUsagePercentage, 100)}%` }}
+                                >
+                                    <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:24px_24px] animate-[shimmer_2s_linear_infinite]" />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-[0.2em] text-[#A0A0A0]">
+                                <span>Minimum Level</span>
+                                <div className="flex items-center gap-1.5 font-black text-blue-600">
+                                    <div className="w-2 h-2 rounded-full bg-blue-600" />
+                                    Available: {formatCurrency(remainingLimit)}
+                                </div>
+                                <span>Limit Cap: {formatCurrency(pendingLimit)}</span>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Footer Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-8 border-t border-[#F0F0F0]">
+                        <div className="space-y-1.5">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#A0A0A0]">Available Credit</p>
+                            <p className="text-xl font-bold text-blue-600">{formatCurrency(remainingLimit)}</p>
+                        </div>
+                        <div className="space-y-1.5">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#A0A0A0]">Total Settled</p>
+                            <p className="text-xl font-bold text-[#1A1A1A]">{formatCurrency(totalPaid)}</p>
+                        </div>
+                        <div className="space-y-1.5">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#A0A0A0]">Lifetime Value</p>
+                            <p className="text-xl font-bold text-[#1A1A1A]">{formatCurrency(totalLifetimeValue)}</p>
+                        </div>
+                        <div className="hidden md:flex flex-col justify-end items-end">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 flex items-center gap-1.5">
+                                <ShieldCheck className="h-4 w-4" />
+                                Portfolio Analysis Current
+                            </p>
+                        </div>
+                    </div>
+
+                    {limitUsagePercentage >= 80 && (
+                        <div className={cn("p-5 rounded-2xl border flex items-start gap-5 animate-in fade-in slide-in-from-top-3 duration-500", theme.bg, theme.border)}>
+                            <AlertCircle className={cn("h-6 w-6 shrink-0", theme.text)} />
+                            <p className={cn("text-sm font-medium leading-relaxed italic", theme.text)}>
+                                {limitUsagePercentage >= 100
+                                    ? "Critical Authorization Notice: New procurement cycles are currently restricted due to credit ceiling exhaustion. Immediate reconciliation required."
+                                    : "Predictive Warning: Account utilization is approaching assigned ceiling. Balance settlement recommended to ensure operational continuity."}
+                            </p>
+                        </div>
+                    )}
                 </div>
-
-                {/* Additional Stats (if provided) */}
-                {(totalPaid > 0 || totalLifetimeValue > 0) && (
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                        {totalLifetimeValue > 0 && (
-                            <div>
-                                <p className="text-xs text-muted-foreground">Total Orders</p>
-                                <p className="text-lg font-semibold text-foreground">
-                                    {formatCurrency(totalLifetimeValue)}
-                                </p>
-                            </div>
-                        )}
-                        {totalPaid > 0 && (
-                            <div>
-                                <p className="text-xs text-muted-foreground">Total Paid</p>
-                                <p className="text-lg font-semibold text-green-600">
-                                    {formatCurrency(totalPaid)}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Warning Message */}
-                {limitUsagePercentage >= 80 && (
-                    <div className={cn(
-                        "p-3 rounded-lg border text-sm",
-                        limitUsagePercentage >= 100
-                            ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/20 dark:border-red-800 dark:text-red-300"
-                            : "bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-950/20 dark:border-orange-800 dark:text-orange-300"
-                    )}>
-                        <p className="font-medium flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4" />
-                            {limitUsagePercentage >= 100
-                                ? "Orders Blocked: Please clear pending payments"
-                                : "Approaching limit: Consider making a payment soon"}
-                        </p>
-                    </div>
-                )}
             </CardContent>
         </Card>
     );

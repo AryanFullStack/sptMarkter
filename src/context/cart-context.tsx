@@ -30,6 +30,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
 
+    // Function to fetch current user's role
+    const fetchUserRole = async () => {
+        const { createClient } = await import("@/supabase/client");
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+            const { data: userData } = await supabase
+                .from("users")
+                .select("role")
+                .eq("id", user.id)
+                .single();
+
+            return userData?.role || null;
+        }
+        return null;
+    };
+
     // Load cart from localStorage and fetch user role on mount
     useEffect(() => {
         const savedCart = localStorage.getItem("cart");
@@ -37,25 +55,74 @@ export function CartProvider({ children }: { children: ReactNode }) {
             setItems(JSON.parse(savedCart));
         }
 
-        async function getUserRole() {
+        const initAuth = async () => {
             const { createClient } = await import("@/supabase/client");
             const supabase = createClient();
-            const { data: { user } } = await supabase.auth.getUser();
 
-            if (user) {
-                const { data: userData } = await supabase
-                    .from("users")
-                    .select("role")
-                    .eq("id", user.id)
-                    .single();
+            // Initial role fetch
+            const role = await fetchUserRole();
+            setUserRole(role);
 
-                setUserRole(userData?.role || null);
-            }
-        }
+            // Set up auth state listener
+            const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+                if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+                    const newRole = await fetchUserRole();
+                    setUserRole(newRole);
+                }
+            });
 
-        getUserRole();
-        setIsLoaded(true);
+            setIsLoaded(true);
+
+            return () => {
+                subscription.unsubscribe();
+            };
+        };
+
+        const cleanup = initAuth();
+        return () => {
+            cleanup.then(unsub => unsub?.());
+        };
     }, []);
+
+    // Effect to refresh cart prices when user role changes
+    useEffect(() => {
+        if (isLoaded && items.length > 0) {
+            refreshCartPrices(userRole);
+        }
+    }, [userRole, isLoaded]);
+
+    const refreshCartPrices = async (role: string | null) => {
+        try {
+            const { createClient } = await import("@/supabase/client");
+            const supabase = createClient();
+
+            const productIds = items.map(item => item.product_id);
+            if (productIds.length === 0) return;
+
+            const { data: products } = await supabase
+                .from("products")
+                .select("id, price_customer, price_retailer, price_beauty_parlor")
+                .in("id", productIds);
+
+            if (products) {
+                setItems(prevItems => prevItems.map(item => {
+                    const product = products.find(p => p.id === item.product_id);
+                    if (product) {
+                        let newPrice = product.price_customer || 0;
+                        if (role === "beauty_parlor") {
+                            newPrice = product.price_beauty_parlor || 0;
+                        } else if (role === "retailer") {
+                            newPrice = product.price_retailer || 0;
+                        }
+                        return { ...item, price: newPrice };
+                    }
+                    return item;
+                }));
+            }
+        } catch (error) {
+            console.error("Error refreshing cart prices:", error);
+        }
+    };
 
     // Save cart to localStorage whenever it changes
     useEffect(() => {

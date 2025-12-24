@@ -11,6 +11,7 @@ import { ProfileForm } from "@/components/dashboards/profile-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getRetailerDashboardData, requestPayment } from "@/app/actions/retailer-actions";
 import { getPendingLimitInfo } from "@/app/actions/pending-limit-actions";
+import { getUpcomingPayments, getOverduePayments } from "@/app/actions/payment-schedule-actions";
 import { notify } from "@/lib/notifications";
 import { FinancialSummaryCard } from "@/components/shared/financial-summary-card";
 import { PaymentTimeline } from "@/components/shared/payment-timeline";
@@ -19,11 +20,13 @@ import { OrderCardEnhanced } from "@/components/shared/order-card-enhanced";
 import { PaymentRecordModal } from "@/components/shared/payment-record-modal";
 import { cn } from "@/lib/utils";
 
-export default function RetailerDashboard() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const [pendingInfo, setPendingInfo] = useState<any>(null);
+export default function RetailerDashboard({ initialData }: { initialData?: any }) {
+  const [data, setData] = useState<any>(initialData || null);
+  const [loading, setLoading] = useState(!initialData);
+  const [user, setUser] = useState<any>(initialData?.user || null);
+  const [pendingInfo, setPendingInfo] = useState<any>(initialData?.pendingInfo || null);
+  const [upcomingPayments, setUpcomingPayments] = useState<any[]>(initialData?.upcomingPayments || []);
+  const [overduePayments, setOverduePayments] = useState<any[]>(initialData?.overduePayments || []);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
@@ -55,13 +58,18 @@ export default function RetailerDashboard() {
       setUser(user);
 
       if (user) {
-        const [dashboardData, limitInfo] = await Promise.all([
+        // If we don't have initial data, OR if we're refreshing, fetch everything
+        const [dashboardData, limitInfo, upcomingRes, overdueRes] = await Promise.all([
           getRetailerDashboardData(),
-          getPendingLimitInfo(user.id)
+          getPendingLimitInfo(user.id),
+          getUpcomingPayments(user.id, "retailer"),
+          getOverduePayments(user.id, "retailer")
         ]);
 
         setData(dashboardData);
         setPendingInfo(limitInfo);
+        setUpcomingPayments(upcomingRes.payments || []);
+        setOverduePayments(overdueRes.payments || []);
       }
     } catch (e) {
       console.error(e);
@@ -154,13 +162,58 @@ export default function RetailerDashboard() {
 
         <TabsContent value="overview" className="space-y-10 focus-visible:outline-none">
           {/* Notifications/Warnings */}
-          {pendingInfo && (
-            <div className="animate-in fade-in slide-in-from-top-4 duration-700">
-              <PendingLimitWarning
-                currentPending={pendingInfo.currentPending || 0}
-                pendingLimit={pendingInfo.pendingAmountLimit || 0}
-                onPayNow={() => setActiveTab("orders")}
-              />
+          {(pendingInfo || upcomingPayments.length > 0 || overduePayments.length > 0) && (
+            <div className="animate-in fade-in slide-in-from-top-4 duration-700 space-y-6">
+              {/* Overdue Payments Alert */}
+              {overduePayments.length > 0 && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h3 className="text-red-800 font-bold flex items-center gap-2">
+                      <Clock className="h-5 w-5" /> Action Required: Overdue Payments
+                    </h3>
+                    <p className="text-red-700 text-sm mt-1">
+                      You have {overduePayments.length} payment{overduePayments.length !== 1 ? 's' : ''} past due. Please settle immediately to avoid service interruption.
+                    </p>
+                  </div>
+                  <Button variant="destructive" size="sm" onClick={() => setActiveTab("orders")}>
+                    View & Pay <ArrowUpRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Upcoming Payments Alert */}
+              {upcomingPayments.length > 0 && (
+                <div className="bg-[#FDFCF9] border-l-4 border-[#D4AF37] p-4 rounded-r-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h3 className="text-[#9A7D0A] font-bold flex items-center gap-2">
+                      <CreditCard className="h-5 w-5" /> Upcoming Payments
+                    </h3>
+                    <p className="text-[#8A7009] text-sm mt-1">
+                      You have {upcomingPayments.length} payment{upcomingPayments.length !== 1 ? 's' : ''} due in the next 30 days. Plan ahead!
+                    </p>
+                  </div>
+                  <Button variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10" size="sm" onClick={() => setActiveTab("orders")}>
+                    View Schedule
+                  </Button>
+                </div>
+              )}
+
+              {pendingInfo && (
+                <FinancialSummaryCard
+                  totalPending={pendingInfo.currentPending || 0}
+                  pendingLimit={pendingInfo.pendingAmountLimit || 0}
+                  totalPaid={stats?.totalPaid || 0}
+                  totalLifetimeValue={stats?.totalSpent || 0}
+                // className="mb-10" // Removed MB since container handles spacing
+                />
+              )}
+              {pendingInfo && (
+                <PendingLimitWarning
+                  currentPending={pendingInfo.currentPending || 0}
+                  pendingLimit={pendingInfo.pendingAmountLimit || 0}
+                  onPayNow={() => setActiveTab("orders")}
+                />
+              )}
             </div>
           )}
 

@@ -36,10 +36,21 @@ export default async function Dashboard() {
     return redirect("/salesman");
   }
 
+  // Fetch unified data for roles that use it
+  let initialData = null;
+  if (role === "retailer" || role === "beauty_parlor") {
+    const { loadUnifiedDashboardData } = await import("@/app/actions/retailer-actions");
+    try {
+      initialData = await loadUnifiedDashboardData(role);
+    } catch (error) {
+      console.error("Error loading initial dashboard data:", error);
+    }
+  }
+
   return (
     <DashboardLayout role={role as any}>
-      {role === "beauty_parlor" && <ParlorDashboard />}
-      {role === "retailer" && <RetailerDashboard />}
+      {role === "beauty_parlor" && <ParlorDashboard initialData={initialData} />}
+      {role === "retailer" && <RetailerDashboard initialData={initialData} />}
       {(role === "customer" || role === "local_customer") && <CustomerDashboard />}
     </DashboardLayout>
   );

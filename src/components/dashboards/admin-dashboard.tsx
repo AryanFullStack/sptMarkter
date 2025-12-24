@@ -61,6 +61,13 @@ import { SalesmanManagement } from "@/components/admin/salesman-management";
 import { LedgerReports } from "@/components/admin/ledger-reports";
 import { PaymentRequestManagement } from "../shared/payment-request-management";
 import { PaymentRecordModal } from "../shared/payment-record-modal";
+import { PaymentReminderAlert } from "@/components/shared/payment-reminder-alert";
+import { PaymentManagementCards } from "@/components/shared/payment-management-cards";
+import {
+  getUncollectedInitialPayments,
+  getUpcomingPayments,
+  getPaymentReminders
+} from "@/app/actions/payment-schedule-actions";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -85,6 +92,9 @@ export default function AdminDashboard() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
   const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [uncollectedPayments, setUncollectedPayments] = useState<any[]>([]);
+  const [scheduledPayments, setScheduledPayments] = useState<any[]>([]);
+  const [paymentReminders, setPaymentReminders] = useState<any[]>([]);
 
   const supabase = createClient();
 
@@ -103,6 +113,16 @@ export default function AdminDashboard() {
       setPendingUsers(data.pendingUsers || []);
       setAllUsers(data.allUsers || []);
       setPendingPaymentOrders(data.pendingPaymentOrders || []);
+
+      // Load payment schedule data
+      const uncollected = await getUncollectedInitialPayments();
+      const upcoming = await getUpcomingPayments();
+      const reminders = await getPaymentReminders('admin-id', 'admin');
+
+      setUncollectedPayments(uncollected.orders || []);
+      setScheduledPayments(upcoming.payments || []);
+      setPaymentReminders(reminders.reminders || []);
+
       // Initial data will be set by filterDataByPeriod
       filterDataByPeriod(data.allOrders || [], timePeriod);
     } catch (e) {
@@ -628,6 +648,20 @@ export default function AdminDashboard() {
         </TabsContent>
 
         <TabsContent value="payments" className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          {/* Payment Reminders */}
+          {paymentReminders.length > 0 && (
+            <PaymentReminderAlert reminders={paymentReminders} onDismiss={() => loadDashboardData()} />
+          )}
+
+          {/* Payment Schedule Management */}
+          <div>
+            <h2 className="text-2xl font-bold mb-6">Payment Schedule Management</h2>
+            <PaymentManagementCards
+              uncollectedOrders={uncollectedPayments}
+              scheduledOrders={scheduledPayments}
+            />
+          </div>
+
           <Card className="border-none shadow-sm overflow-hidden">
             <CardHeader className="border-b border-[#F7F5F2]">
               <CardTitle className="font-serif text-2xl flex items-center gap-3">
