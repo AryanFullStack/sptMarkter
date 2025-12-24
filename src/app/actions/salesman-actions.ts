@@ -414,7 +414,7 @@ export async function createOrderForClient(
       .select("id")
       .eq("salesman_id", user.id)
       .eq("shop_id", clientId)
-      .single();
+      .maybeSingle();
 
   if (!shopAssignment) {
       return { error: "Unauthorized: You are not assigned to this shop. Please contact your administrator." };
@@ -435,16 +435,40 @@ export async function createOrderForClient(
     }
   }
 
-  // Get client data to determine role for pricing
+  // Get client data to determine role for pricing and fetch address
   const { data: clientData } = await supabase
     .from("users")
-    .select("role")
+    .select(`
+      full_name,
+      role,
+      phone,
+      address:addresses (
+        address_line1,
+        address_line2,
+        city,
+        state,
+        postal_code,
+        phone
+      )
+    `)
     .eq("id", clientId)
     .single();
 
   if (!clientData) {
     return { error: "Client not found" };
   }
+
+  // Handle address (get the first one if multiple exist)
+  const userAddress = Array.isArray(clientData.address) ? clientData.address[0] : clientData.address;
+  const shippingAddress = userAddress ? {
+    full_name: clientData.full_name,
+    address_line1: userAddress.address_line1,
+    address_line2: userAddress.address_line2,
+    city: userAddress.city,
+    state: userAddress.state,
+    postal_code: userAddress.postal_code,
+    phone: userAddress.phone || clientData.phone
+  } : {};
 
   // Calculate order total with role-based pricing
   let subtotal = 0;

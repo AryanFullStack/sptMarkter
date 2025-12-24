@@ -601,8 +601,9 @@ export async function loadAdminDashboardDataAction() {
   // 3. Top customers by revenue
   const customerRevenueMap = new Map();
   orders.forEach(o => {
-    if (o.users?.full_name) {
-      const customerName = o.users.full_name;
+    const user = Array.isArray(o.users) ? o.users[0] : o.users;
+    if (user?.full_name) {
+      const customerName = user.full_name;
       const current = customerRevenueMap.get(customerName) || { revenue: 0, orders: 0, pending: 0 };
       customerRevenueMap.set(customerName, {
         revenue: current.revenue + (Number(o.total_amount) || 0),
@@ -810,6 +811,10 @@ export async function loadAdminOrdersAction() {
         full_name,
         role
       ),
+      recorded_by_user:recorded_by (
+        full_name,
+        role
+      ),
       order_items_data:order_items!order_id(
         *,
         product:products(name, images)
@@ -834,7 +839,15 @@ export async function loadSubAdminOrdersAction() {
     .from("orders")
     .select(`
       *,
-      user:users!user_id(full_name, email),
+      users:users!user_id (
+        email,
+        full_name,
+        role
+      ),
+      recorded_by_user:recorded_by (
+        full_name,
+        role
+      ),
       order_items_data:order_items!order_id(
         *,
         product:products(name, images)

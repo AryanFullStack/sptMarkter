@@ -18,6 +18,7 @@ export default function SubAdminStockPage() {
     const [loading, setLoading] = useState(true);
     const [adjustingProduct, setAdjustingProduct] = useState<any>(null);
     const [adjustment, setAdjustment] = useState({ quantity: 0, reason: "" });
+    const [stockFilter, setStockFilter] = useState<"all" | "low" | "medium">("all");
     const supabase = createClient();
 
     useEffect(() => {
@@ -103,6 +104,26 @@ export default function SubAdminStockPage() {
         },
     ];
 
+    const stats = {
+        total: products.length,
+        lowStock: products.filter(p => (p.stock_quantity || 0) <= 10).length,
+        mediumStock: products.filter(p => {
+            const stock = p.stock_quantity || 0;
+            return stock > 10 && stock <= 50;
+        }).length
+    };
+
+    const filteredProducts = products.filter(p => {
+        const stock = p.stock_quantity || 0;
+        if (stockFilter === "low") return stock <= 10;
+        if (stockFilter === "medium") return stock > 10 && stock <= 50;
+        return true;
+    });
+
+    const toggleFilter = (filter: "low" | "medium" | "all") => {
+        setStockFilter(prev => prev === filter ? "all" : filter);
+    };
+
     return (
         <div className="space-y-10">
             {/* Page Header */}
@@ -122,15 +143,100 @@ export default function SubAdminStockPage() {
                 </div>
             </div>
 
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card
+                    className={cn(
+                        "border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-all cursor-pointer ring-2 ring-transparent",
+                        stockFilter === "low" && "ring-red-500 shadow-md bg-red-50/10"
+                    )}
+                    onClick={() => toggleFilter("low")}
+                >
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest">
+                            Low Stock Alert
+                        </CardTitle>
+                        <AlertCircle className={cn("h-4 w-4", stockFilter === "low" ? "text-red-600" : "text-red-500")} />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-baseline gap-2">
+                            <span className={cn("text-3xl font-bold", stockFilter === "low" ? "text-red-700" : "text-red-600")}>
+                                {stats.lowStock}
+                            </span>
+                            <span className="text-[10px] font-medium text-[#6B6B6B]">Items &lt; 10 units</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card
+                    className={cn(
+                        "border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-all cursor-pointer ring-2 ring-transparent",
+                        stockFilter === "medium" && "ring-[#C77D2E] shadow-md bg-[#C77D2E]/5"
+                    )}
+                    onClick={() => toggleFilter("medium")}
+                >
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest">
+                            Medium Stock
+                        </CardTitle>
+                        <Package className={cn("h-4 w-4", stockFilter === "medium" ? "text-[#B06A20]" : "text-[#C77D2E]")} />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-baseline gap-2">
+                            <span className={cn("text-3xl font-bold", stockFilter === "medium" ? "text-[#B06A20]" : "text-[#C77D2E]")}>
+                                {stats.mediumStock}
+                            </span>
+                            <span className="text-[10px] font-medium text-[#6B6B6B]">Items 10-50 units</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card
+                    className={cn(
+                        "border-none shadow-sm bg-white overflow-hidden group hover:shadow-md transition-all cursor-pointer ring-2 ring-transparent",
+                        stockFilter === "all" && "ring-[#2D5F3F] shadow-md bg-[#2D5F3F]/5"
+                    )}
+                    onClick={() => setStockFilter("all")}
+                >
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest">
+                            Total Products
+                        </CardTitle>
+                        <Layers className={cn("h-4 w-4", stockFilter === "all" ? "text-[#1E4D2B]" : "text-[#2D5F3F]")} />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-baseline gap-2">
+                            <span className={cn("text-3xl font-bold", stockFilter === "all" ? "text-[#1A1A1A]" : "text-[#1A1A1A]")}>
+                                {stats.total}
+                            </span>
+                            <span className="text-[10px] font-medium text-[#6B6B6B]">Managed SKUs</span>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
             <Card className="border-none shadow-sm overflow-hidden">
                 <CardHeader className="bg-[#F7F5F2]/50 border-b border-[#E8E8E8] px-8 py-8">
                     <div className="flex justify-between items-center">
                         <div>
-                            <CardTitle className="font-serif text-2xl">Inventory Stream</CardTitle>
-                            <CardDescription>Live tracking of all product stock levels</CardDescription>
+                            <CardTitle className="font-serif text-2xl">
+                                {stockFilter === "low" ? "Low Stock Registry" : stockFilter === "medium" ? "Medium Stock Registry" : "Inventory Stream"}
+                            </CardTitle>
+                            <CardDescription>
+                                {stockFilter === "low" ? "Viewing products requiring immediate attention" : stockFilter === "medium" ? "Viewing products with moderate stock levels" : "Live tracking of all product stock levels"}
+                            </CardDescription>
                         </div>
                         <div className="flex gap-2">
-                            <Button variant="outline" size="icon" className="h-10 w-10 border-[#E8E8E8] bg-white"><Filter className="h-4 w-4 text-[#6B6B6B]" /></Button>
+                            {stockFilter !== "all" && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setStockFilter("all")}
+                                    className="text-xs font-bold text-[#6B6B6B] hover:text-[#1A1A1A]"
+                                >
+                                    Clear Filter
+                                </Button>
+                            )}
                             <Button variant="outline" size="icon" className="h-10 w-10 border-[#E8E8E8] bg-white" onClick={loadProducts}><RefreshCw className="h-4 w-4 text-[#6B6B6B]" /></Button>
                         </div>
                     </div>
@@ -144,7 +250,7 @@ export default function SubAdminStockPage() {
                             </div>
                         ) : (
                             <DataTable
-                                data={products}
+                                data={filteredProducts}
                                 columns={columns}
                                 searchable
                                 searchPlaceholder="Track product name or brand..."
@@ -225,4 +331,3 @@ export default function SubAdminStockPage() {
         </div>
     );
 }
-
