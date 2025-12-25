@@ -504,7 +504,7 @@ export async function createOrderForClient(
     paid_amount: paidAmount,
     pending_amount: pendingAmount,
     payment_status: paidAmount >= totalAmount ? "paid" : paidAmount > 0 ? "partial" : "pending",
-    shipping_address: {}, 
+    shipping_address: shippingAddress, 
     recorded_by: user.id,
     created_via: "salesman",
     notes: notes ? `${notes} (Brand ID: ${brandId})` : `Order created by salesman (Brand ID: ${brandId})`,
