@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { createClient } from "@/supabase/client";
 import {
   Package,
@@ -99,38 +100,74 @@ export default function AdminDashboard() {
 
   const supabase = createClient();
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  async function loadDashboardData() {
-    setLoading(true);
-    try {
-      const data = await loadAdminDashboardDataAction();
-      setStats(data.stats);
-      setRecentOrders(data.recentOrders || []);
-      setLowStockProducts(data.lowStockProducts || []);
-      setAllOrders(data.allOrders || []);
-      setPendingUsers(data.pendingUsers || []);
-      setAllUsers(data.allUsers || []);
-      setPendingPaymentOrders(data.pendingPaymentOrders || []);
-
-      // Load payment schedule data
-      const uncollected = await getUncollectedInitialPayments();
-      const upcoming = await getUpcomingPayments();
-      const reminders = await getPaymentReminders('admin-id', 'admin');
-
-      setUncollectedPayments(uncollected.orders || []);
-      setScheduledPayments(upcoming.payments || []);
-      setPaymentReminders(reminders.reminders || []);
-
-      // Initial data will be set by filterDataByPeriod
-      filterDataByPeriod(data.allOrders || [], timePeriod);
-    } catch (e) {
-      console.error("Dashboard Load Error", e);
-      notify.error("Error", "Failed to load dashboard data");
+  // 1. SWR Data Fetching
+  const { data: dashboardData, mutate: mutateDashboard } = useSWR(
+    'admin-dashboard-main',
+    async () => {
+      const [data, uncollected, upcoming, reminders] = await Promise.all([
+        loadAdminDashboardDataAction(),
+        getUncollectedInitialPayments(),
+        getUpcomingPayments(),
+        getPaymentReminders('admin-id', 'admin')
+      ]);
+      return { ...data, uncollected, upcoming, reminders };
     }
-    setLoading(false);
+  );
+
+  useEffect(() => {
+    if (dashboardData) {
+      setStats(dashboardData.stats);
+      setRecentOrders(dashboardData.recentOrders || []);
+      setLowStockProducts(dashboardData.lowStockProducts || []);
+      setAllOrders(dashboardData.allOrders || []);
+      setPendingUsers(dashboardData.pendingUsers || []);
+      setAllUsers(dashboardData.allUsers || []);
+      setPendingPaymentOrders(dashboardData.pendingPaymentOrders || []);
+
+      setUncollectedPayments(dashboardData.uncollected.orders || []);
+      setScheduledPayments(dashboardData.upcoming.payments || []);
+      setPaymentReminders(dashboardData.reminders.reminders || []);
+
+      filterDataByPeriod(dashboardData.allOrders || [], timePeriod);
+      setLoading(false);
+    }
+  }, [dashboardData, timePeriod]);
+
+  // 2. Realtime Subscriptions
+  useEffect(() => {
+    // Listen for GLOBAL changes that affect admin stats
+    const channels = [
+      supabase.channel('admin-orders-all')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+          mutateDashboard();
+          notify.info("System Activity", "New order activity detected.");
+        })
+        .subscribe(),
+
+      supabase.channel('admin-users-all')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+          mutateDashboard();
+          // If specific event checks are needed, add here. For now, general refresh.
+        })
+        .subscribe(),
+
+      supabase.channel('admin-payments-all')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => mutateDashboard())
+        .subscribe(),
+
+      supabase.channel('admin-products-all')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => mutateDashboard())
+        .subscribe()
+    ];
+
+    return () => {
+      channels.forEach(channel => supabase.removeChannel(channel));
+    };
+  }, [supabase, mutateDashboard]);
+
+  // Remove explicit loadData calls in handlers
+  async function loadDashboardData() {
+    mutateDashboard();
   }
 
   const handleApproveUser = async (userId: string) => {

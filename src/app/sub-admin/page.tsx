@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { createClient } from "@/supabase/client";
 import {
     ShoppingCart,
@@ -32,6 +33,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { approveUserAction, deleteUserAction, markOrderPaidAction } from "@/app/admin/actions";
 import { Input } from "@/components/ui/input";
 import { PaymentRequestManagement } from "@/components/shared/payment-request-management";
@@ -39,6 +41,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function SubAdminPage() {
+    const { toast } = useToast();
     const [stats, setStats] = useState({
         assignedOrders: 0,
         pendingOrders: 0,
@@ -51,23 +54,20 @@ export default function SubAdminPage() {
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
 
-    useEffect(() => {
-        loadDashboardData();
-    }, []);
+    // 1. SWR Fetch
+    const { data: user } = useSWR('user', async () => {
+        const { data } = await supabase.auth.getUser();
+        return data.user;
+    });
 
-    async function loadDashboardData() {
-        setLoading(true);
-        try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-            if (!user) return;
-
+    const { data: dashboardData, mutate: mutateDashboard } = useSWR(
+        user ? ['sub-admin-dashboard', user.id] : null,
+        async () => {
             // Fetch assigned orders with customer info
             const { data: assignedOrdersData } = await supabase
                 .from("orders")
                 .select("*, users(full_name)")
-                .eq("assigned_to", user.id)
+                .eq("assigned_to", user!.id)
                 .order("created_at", { ascending: false });
 
             // Fetch pending users
@@ -78,12 +78,20 @@ export default function SubAdminPage() {
                 .is("approved", null)
                 .order("created_at", { ascending: false });
 
+            return { assignedOrdersData, pendingUsersData };
+        }
+    );
+
+    useEffect(() => {
+        if (dashboardData) {
+            const { assignedOrdersData, pendingUsersData } = dashboardData;
+
             // Calculate stats
             const assignedOrdersCount = assignedOrdersData?.length || 0;
             const pendingPayments = assignedOrdersData?.filter(
-                order => (order.pending_amount > 0 || order.payment_status === 'pending_payment' || order.status === 'pending_payment')
+                (order: any) => (order.pending_amount > 0 || order.payment_status === 'pending_payment' || order.status === 'pending_payment')
             ) || [];
-            const pendingOrdersCount = assignedOrdersData?.filter(o => o.status === 'pending').length || 0;
+            const pendingOrdersCount = assignedOrdersData?.filter((o: any) => o.status === 'pending').length || 0;
 
             setStats({
                 assignedOrders: assignedOrdersCount,
@@ -95,11 +103,39 @@ export default function SubAdminPage() {
 
             setPendingPaymentOrders(pendingPayments);
             setPendingUsers(pendingUsersData || []);
-        } catch (error) {
-            console.error("Error loading dashboard data:", error);
-            notify.error("Sync Error", "Failed to load operational data");
+            setLoading(false);
         }
-        setLoading(false);
+    }, [dashboardData]);
+
+
+    // 2. Realtime Subscriptions
+    useEffect(() => {
+        if (!user) return;
+
+        // Listen for assignments to ME
+        const assignmentsChannel = supabase.channel('sub-admin-orders')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${user.id}` }, () => {
+                mutateDashboard();
+                toast({ title: "Update", description: "Your assigned orders have changed." });
+            })
+            .subscribe();
+
+        // Listen for new users needing approval
+        const usersChannel = supabase.channel('sub-admin-users')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+                mutateDashboard();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(assignmentsChannel);
+            supabase.removeChannel(usersChannel);
+        };
+    }, [user, supabase, mutateDashboard]);
+
+    // Stub for handlers
+    async function loadDashboardData() {
+        mutateDashboard();
     }
 
     const handleApproveUser = async (userId: string) => {

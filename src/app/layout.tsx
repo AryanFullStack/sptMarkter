@@ -7,6 +7,7 @@ import { CartProvider } from "@/context/cart-context";
 import { WishlistProvider } from "@/context/wishlist-context";
 import { AddressProvider } from "@/context/address-context";
 import { Toaster } from "@/components/ui/toaster";
+import { RealtimeProvider } from "@/components/providers/realtime-provider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,14 +30,16 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <CartProvider>
-            <WishlistProvider>
-              <AddressProvider>
-                {children}
-                <Toaster />
-              </AddressProvider>
-            </WishlistProvider>
-          </CartProvider>
+          <RealtimeProvider>
+            <CartProvider>
+              <WishlistProvider>
+                <AddressProvider>
+                  {children}
+                  <Toaster />
+                </AddressProvider>
+              </WishlistProvider>
+            </CartProvider>
+          </RealtimeProvider>
         </ThemeProvider>
         <TempoInit />
       </body>

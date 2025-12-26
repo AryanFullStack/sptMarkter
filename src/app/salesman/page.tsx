@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { createClient } from "@/supabase/client";
 import { DollarSign, ShoppingBag, Clock, Users, ArrowUpRight, TrendingUp, Search, ShoppingCart, MapPin, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -27,32 +28,94 @@ export default function SalesmanOverview() {
 
     const supabase = createClient();
 
-    useEffect(() => {
-        loadData();
-    }, []);
+    // 1. User fetch
+    const { data: userData } = useSWR('user', async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        return user;
+    });
 
-    async function loadData() {
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const [dashboardData, routeData, scheduleData, upcomingRes, overdueRes] = await Promise.all([
-                    getSalesmanDashboardData(user.id),
-                    getSalesmanRouteToday(user.id),
-                    getSalesmanAssignedShops(user.id),
-                    getUpcomingPayments(user.id, "salesman"),
-                    getOverduePayments(user.id, "salesman")
-                ]);
-                setData(dashboardData);
-                setTodayRoute(routeData.route || []);
-                setWeeklySchedule(scheduleData.shops || []);
-                setUpcomingPayments(upcomingRes.payments || []);
-                setOverduePayments(overdueRes.payments || []);
-            }
-        } catch (e) {
-            notify.error("Error", "Failed to load dashboard data");
+    // 2. Data fetching with SWR
+    const { data: dashboardData, mutate: mutateDashboard } = useSWR(
+        userData ? ['salesman-dashboard', userData.id] : null,
+        () => getSalesmanDashboardData(userData!.id)
+    );
+
+    const { data: routeRes, mutate: mutateRoute } = useSWR(
+        userData ? ['salesman-route', userData.id] : null,
+        () => getSalesmanRouteToday(userData!.id)
+    );
+
+    const { data: scheduleRes } = useSWR(
+        userData ? ['salesman-schedule', userData.id] : null,
+        () => getSalesmanAssignedShops(userData!.id)
+    );
+
+    const { data: upcomingRes, mutate: mutateUpcoming } = useSWR(
+        userData ? ['salesman-upcoming-payments', userData.id] : null,
+        () => getUpcomingPayments(userData!.id, "salesman")
+    );
+
+    const { data: overdueRes, mutate: mutateOverdue } = useSWR(
+        userData ? ['salesman-overdue-payments', userData.id] : null,
+        () => getOverduePayments(userData!.id, "salesman")
+    );
+
+    useEffect(() => {
+        if (dashboardData && routeRes && scheduleRes && upcomingRes && overdueRes) {
+            setData(dashboardData);
+            setTodayRoute(routeRes.route || []);
+            setWeeklySchedule(scheduleRes.shops || []);
+            setUpcomingPayments(upcomingRes.payments || []);
+            setOverduePayments(overdueRes.payments || []);
+            setLoading(false);
         }
-        setLoading(false);
-    }
+    }, [dashboardData, routeRes, scheduleRes, upcomingRes, overdueRes]);
+
+    // 3. Realtime Subscriptions
+    useEffect(() => {
+        if (!userData) return;
+
+        const ordersChannel = supabase
+            .channel('salesman-orders-realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'orders',
+                    filter: `recorded_by=eq.${userData.id}`
+                },
+                () => {
+                    mutateDashboard(); // Refresh stats and recent orders
+                    mutateUpcoming();   // Refresh payments if order changed
+                    mutateOverdue();
+                }
+            )
+            .subscribe();
+
+        const paymentsChannel = supabase
+            .channel('salesman-payments-realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT', // New payment recorded
+                    schema: 'public',
+                    table: 'payments'
+                },
+                (payload) => {
+                    // Ideally we filter by order ID related to this salesman, but for now refresh metrics
+                    mutateDashboard();
+                    mutateUpcoming();
+                    mutateOverdue();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(ordersChannel);
+            supabase.removeChannel(paymentsChannel);
+        };
+    }, [userData, supabase, mutateDashboard, mutateUpcoming, mutateOverdue]);
 
     async function handleViewDetails(orderId: string) {
         try {

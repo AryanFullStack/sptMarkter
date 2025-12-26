@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import useSWR from "swr";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -25,22 +26,47 @@ export default function FindShopsPage() {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
 
-    useEffect(() => {
-        loadAssignedShops();
-    }, []);
-
-    async function loadAssignedShops() {
-        setLoading(true);
+    const { data: userData } = useSWR('user', async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const res = await getSalesmanAssignedShops(user.id);
-            if (res.shops) {
-                setAllAssignedShops(res.shops);
-                setFilteredShops(res.shops);
-            }
+        return user;
+    });
+
+    const { data: shopsData, mutate } = useSWR(
+        userData ? ['assigned-shops', userData.id] : null,
+        () => getSalesmanAssignedShops(userData!.id)
+    );
+
+    useEffect(() => {
+        if (shopsData?.shops) {
+            setAllAssignedShops(shopsData.shops);
+            setFilteredShops(shopsData.shops);
+            setLoading(false);
         }
-        setLoading(false);
-    }
+    }, [shopsData]);
+
+    useEffect(() => {
+        if (!userData) return;
+
+        const channel = supabase
+            .channel('salesman-assignments-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'salesman_shop_assignments',
+                    filter: `salesman_id=eq.${userData.id}`
+                },
+                () => {
+                    mutate();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [supabase, userData, mutate]);
 
     // Handle Search/Filtering
     useEffect(() => {

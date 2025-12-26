@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { createClient } from "@/supabase/client";
 import { Package, DollarSign, TrendingUp, ShoppingBag, Clock, Tag, ArrowUpRight, ChevronRight, LayoutDashboard, CreditCard, User } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -33,50 +34,95 @@ export default function RetailerDashboard({ initialData }: { initialData?: any }
 
   const supabase = createClient();
 
+  // 1. Data Fetching with SWR
+  const { data: dashboardData, mutate: mutateDashboard } = useSWR(
+    user ? ['retailer-dashboard', user.id] : null,
+    async () => getRetailerDashboardData()
+  );
+
+  const { data: limitInfo, mutate: mutateLimit } = useSWR(
+    user ? ['pending-limit', user.id] : null,
+    async () => getPendingLimitInfo(user.id)
+  );
+
+  const { data: upcomingRes, mutate: mutateUpcoming } = useSWR(
+    user ? ['retailer-upcoming', user.id] : null,
+    async () => getUpcomingPayments(user.id, "retailer")
+  );
+
+  const { data: overdueRes, mutate: mutateOverdue } = useSWR(
+    user ? ['retailer-overdue', user.id] : null,
+    async () => getOverduePayments(user.id, "retailer")
+  );
+
   useEffect(() => {
-    loadData();
-
-    // Handle hash-based tab switching
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace("#", "");
-      if (["overview", "orders", "profile"].includes(hash)) {
-        setActiveTab(hash);
-      } else {
-        setActiveTab("overview");
-      }
-    };
-
-    window.addEventListener("hashchange", handleHashChange);
-    handleHashChange();
-
-    return () => window.removeEventListener("hashchange", handleHashChange);
-  }, []);
-
-  async function loadData() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-
-      if (user) {
-        // If we don't have initial data, OR if we're refreshing, fetch everything
-        const [dashboardData, limitInfo, upcomingRes, overdueRes] = await Promise.all([
-          getRetailerDashboardData(),
-          getPendingLimitInfo(user.id),
-          getUpcomingPayments(user.id, "retailer"),
-          getOverduePayments(user.id, "retailer")
-        ]);
-
-        setData(dashboardData);
-        setPendingInfo(limitInfo);
-        setUpcomingPayments(upcomingRes.payments || []);
-        setOverduePayments(overdueRes.payments || []);
-      }
-    } catch (e) {
-      console.error(e);
-      notify.error("Error", "Failed to load dashboard data");
+    if (dashboardData && limitInfo && upcomingRes && overdueRes) {
+      setData(dashboardData);
+      setPendingInfo(limitInfo);
+      setUpcomingPayments(upcomingRes.payments || []);
+      setOverduePayments(overdueRes.payments || []);
+      setLoading(false);
     }
-    setLoading(false);
-  }
+  }, [dashboardData, limitInfo, upcomingRes, overdueRes]);
+
+
+  // 2. Realtime Subscriptions
+  useEffect(() => {
+    if (!user) return;
+
+    // Listen to MY orders changing (status updates, notes, etc)
+    const ordersChannel = supabase
+      .channel('retailer-orders-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `user_id=eq.${user.id}`
+        },
+        () => {
+          mutateDashboard();
+          mutateLimit(); // Order change might affect pending limit
+          mutateUpcoming();
+          mutateOverdue();
+          notify.info("Update", "Your order status has been updated.");
+        }
+      )
+      .subscribe();
+
+    // Listen to User record changes (Limit changed by admin)
+    const userChannel = supabase
+      .channel('retailer-user-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${user.id}`
+        },
+        () => {
+          mutateLimit();
+          notify.info("Account Update", "Your account settings/limits have been updated.");
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(userChannel);
+    };
+  }, [user, supabase, mutateDashboard, mutateLimit, mutateUpcoming, mutateOverdue]);
+
+  useEffect(() => {
+    // Initial user load if not passed
+    if (!user) {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user) setUser(data.user);
+      });
+    }
+  }, []);
 
   const handleRecordPayment = (orderId: string) => {
     const order = data?.recentOrders?.find((o: any) => o.id === orderId);
@@ -87,7 +133,7 @@ export default function RetailerDashboard({ initialData }: { initialData?: any }
   };
 
   const handlePaymentRecorded = () => {
-    loadData(); // Reload dashboard data
+    // Optimistic update or wait for realtime
     notify.success("Payment Received", "The payment has been recorded and will be verified by our team.");
   };
 
