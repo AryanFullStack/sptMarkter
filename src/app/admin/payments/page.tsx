@@ -1,16 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, Column } from "@/components/shared/data-table";
 import { ExportButton } from "@/components/shared/export-button";
 import { PaymentRecordModal } from "@/components/admin/payment-record-modal";
-import { DollarSign, CreditCard, AlertCircle, Clock, User, Store } from "lucide-react";
+import { DollarSign, CreditCard, AlertCircle, Clock, User, Store, Calendar } from "lucide-react";
 import { formatCurrency, formatDate } from "@/utils/export-utils";
 import { getConsolidatedPendingPaymentsAction } from "@/app/admin/actions";
+import { getUncollectedInitialPayments, getUpcomingPayments, getPaymentReminders } from "@/app/actions/payment-schedule-actions";
 import { PaymentRequestManagement } from "@/components/shared/payment-request-management";
+import { PaymentManagementCards } from "@/components/shared/payment-management-cards";
+import { PaymentReminderAlert } from "@/components/shared/payment-reminder-alert";
 import { notify } from "@/lib/notifications";
 
 interface Order {
@@ -41,25 +45,41 @@ export default function PaymentsPage() {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-    useEffect(() => {
-        loadData();
-    }, []);
+    const [uncollectedPayments, setUncollectedPayments] = useState<any[]>([]);
+    const [scheduledPayments, setScheduledPayments] = useState<any[]>([]);
+    const [reminders, setReminders] = useState<any[]>([]);
 
-    async function loadData() {
-        setLoading(true);
-        try {
-            const data = await getConsolidatedPendingPaymentsAction();
-            const formattedOrders = (data as any[]).map(order => ({
+    // 1. SWR Data Fetching
+    const { data: payData, isLoading: payLoading, mutate: mutatePay } = useSWR(
+        'admin-payments-main',
+        async () => {
+            const [ordersRes, uncollected, upcoming, rems] = await Promise.all([
+                getConsolidatedPendingPaymentsAction(),
+                getUncollectedInitialPayments(),
+                getUpcomingPayments(),
+                getPaymentReminders('admin', 'admin') // Usage context
+            ]);
+            return { ordersRes, uncollected, upcoming, rems };
+        }
+    );
+
+    useEffect(() => {
+        if (payData) {
+            const formattedOrders = (payData.ordersRes as any[]).map(order => ({
                 ...order,
                 user: order.user?.[0] || null,
                 recorded_by_user: order.recorded_by_user?.[0] || null
             }));
             setOrders(formattedOrders as Order[]);
-        } catch (error: any) {
-            notify.error("Error", "Failed to load pending payments");
-        } finally {
+            setUncollectedPayments(payData.uncollected.orders || []);
+            setScheduledPayments(payData.upcoming.payments || []);
+            setReminders(payData.rems.reminders || []);
             setLoading(false);
         }
+    }, [payData]);
+
+    async function loadData() {
+        mutatePay();
     }
 
     const handleRecordPayment = (order: Order) => {
@@ -236,11 +256,34 @@ export default function PaymentsPage() {
                 </Card>
             </div>
 
+            {/* Urgent Reminders */}
+            {reminders.length > 0 && (
+                <div className="space-y-4">
+                    <h2 className="font-serif text-2xl font-semibold flex items-center gap-2">
+                        <AlertCircle className="h-6 w-6 text-red-500" />
+                        Urgent Payment Reminders
+                    </h2>
+                    <PaymentReminderAlert reminders={reminders} />
+                </div>
+            )}
+
+            {/* Payment Schedule Management */}
+            <div className="space-y-4">
+                <h2 className="font-serif text-2xl font-semibold flex items-center gap-2">
+                    <Calendar className="h-6 w-6 text-[#2D5F3F]" />
+                    Collection Schedule
+                </h2>
+                <PaymentManagementCards
+                    uncollectedOrders={uncollectedPayments}
+                    scheduledOrders={scheduledPayments}
+                />
+            </div>
+
             {/* Payment Requests Section */}
             <div className="space-y-4">
                 <h2 className="font-serif text-2xl font-semibold flex items-center gap-2">
                     <Clock className="h-6 w-6 text-[#C77D2E]" />
-                    Payment Requests (Action Required)
+                    Salesman Payment Requests
                 </h2>
                 <PaymentRequestManagement />
             </div>

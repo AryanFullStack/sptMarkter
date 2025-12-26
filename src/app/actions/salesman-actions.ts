@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/supabase/admin";
 import { createClient } from "@/supabase/server";
 import { revalidatePath } from "next/cache";
+import { logAudit } from "@/utils/audit-logger";
 
 /**
  * Get brands assigned to a salesman
@@ -605,6 +606,20 @@ export async function createOrderForClient(
     },
   });
 
+  // Log to centralized audit_logs
+  await logAudit({
+    action: "ORDER_CREATED",
+    entity_type: "order",
+    entity_id: order.id,
+    changes: {
+      client_id: clientId,
+      order_number: orderNumber,
+      total_amount: totalAmount,
+      paid_amount: paidAmount,
+      brand_id: brandId,
+    },
+  });
+
   // NEW: Create payment reminder for the customer if due date is set
   if (paymentDue && pendingAmount > 0) {
     try {
@@ -724,6 +739,19 @@ export async function recordPartialPayment(
       amount,
       payment_method: paymentMethod,
       notes,
+    },
+  });
+
+  // Log to centralized audit_logs
+  await logAudit({
+    action: status === "pending" ? "PAYMENT_REQUESTED" : "PAYMENT_RECORDED",
+    entity_type: "payment",
+    entity_id: orderId, // Or we could get the payment ID if needed, but orderId is the main context here
+    changes: {
+      amount,
+      payment_method: paymentMethod,
+      notes,
+      status
     },
   });
 

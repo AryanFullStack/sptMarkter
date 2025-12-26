@@ -1,4 +1,4 @@
-import { Database } from "@/types/supabase";
+import { Database } from "../types/supabase";
 
 export type UserRole = Database["public"]["Enums"]["user_role"];
 
@@ -73,6 +73,12 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   local_customer: [
     PERMISSIONS.VIEW_PRODUCTS,
   ],
+  salesman: [
+    PERMISSIONS.VIEW_PRODUCTS,
+    PERMISSIONS.VIEW_ASSIGNED_ORDERS,
+    PERMISSIONS.VIEW_PAYMENTS,
+    PERMISSIONS.RECORD_PAYMENTS,
+  ],
 };
 
 export function hasPermission(role: UserRole, permission: string): boolean {
@@ -119,6 +125,7 @@ export function getRoleDisplayName(role: UserRole): string {
     retailer: "Retailer",
     beauty_parlor: "Beauty Parlor",
     local_customer: "Customer",
+    salesman: "Salesman",
   };
   return displayNames[role] || role;
 }

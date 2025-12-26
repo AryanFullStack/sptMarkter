@@ -708,6 +708,12 @@ export async function deleteUserAction(userId: string) {
         // Just in case cascade isn't working as expected or we want to be explicit
         await supabase.from("users").delete().eq("id", userId);
     }
+
+    await logAudit({
+        action: "USER_DELETED",
+        entity_type: "user",
+        entity_id: userId,
+    });
     
     console.log("[deleteUserAction] Success");
     revalidatePath("/admin");
@@ -727,6 +733,13 @@ export async function updateUserRoleAction(userId: string, role: string) {
         console.error("[updateUserRoleAction] Error:", error);
         throw new Error(error.message);
     }
+
+    await logAudit({
+        action: "USER_ROLE_UPDATED",
+        entity_type: "user",
+        entity_id: userId,
+        changes: { role },
+    });
     
     console.log("[updateUserRoleAction] Success");
     revalidatePath("/admin");
@@ -750,6 +763,13 @@ export async function approveUserAction(userId: string) {
         console.error("[approveUserAction] Error:", error);
         throw new Error(error.message);
     }
+
+    await logAudit({
+        action: "USER_APPROVED",
+        entity_type: "user",
+        entity_id: userId,
+        changes: { approved: true },
+    });
     
     console.log("[approveUserAction] Success");
     revalidatePath("/admin");

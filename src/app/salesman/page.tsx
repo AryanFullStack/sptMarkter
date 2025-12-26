@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { SalesmanActivityFeed } from "@/components/salesman/salesman-activity-feed";
 
 export default function SalesmanOverview() {
     const [data, setData] = useState<any>(null);
@@ -541,6 +542,11 @@ export default function SalesmanOverview() {
                             </Link>
                         </CardContent>
                     </Card>
+
+                    {/* Salesman Activity Feed */}
+                    {userData && (
+                        <SalesmanActivityFeed userId={userData.id} />
+                    )}
                 </div>
             </div>
 

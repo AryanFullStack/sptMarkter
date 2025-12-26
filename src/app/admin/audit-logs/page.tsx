@@ -37,27 +37,33 @@ export default function AuditLogsPage() {
             if (changes.newPendingAmount !== undefined) details.push(`Pending: Rs. ${changes.newPendingAmount}`);
             if (changes.notes) details.push(`Notes: ${changes.notes}`);
         }
-        // Order status changes
-        else if (action === "ORDER_STATUS_UPDATED") {
-            if (changes.oldStatus) details.push(`From: ${changes.oldStatus}`);
+        // Order-related actions
+        else if (action.includes("ORDER")) {
+            if (changes.order_number) details.push(`Order: ${changes.order_number}`);
+            if (changes.total_amount) details.push(`Total: Rs. ${changes.total_amount}`);
+            if (changes.paid_amount !== undefined) details.push(`Paid: Rs. ${changes.paid_amount}`);
+            if (changes.status) details.push(`Status: ${changes.status}`);
             if (changes.newStatus) details.push(`To: ${changes.newStatus}`);
         }
-        // User changes
+        // User-related actions
         else if (action.includes("USER")) {
             if (changes.role) details.push(`Role: ${changes.role}`);
             if (changes.email) details.push(`Email: ${changes.email}`);
             if (changes.full_name) details.push(`Name: ${changes.full_name}`);
+            if (changes.approved !== undefined) details.push(`Approved: ${changes.approved}`);
+            if (changes.is_active !== undefined) details.push(`Active: ${changes.is_active}`);
         }
-        // Credit changes
-        else if (action.includes("CREDIT")) {
-            if (changes.amount) details.push(`Amount: Rs. ${changes.amount}`);
-            if (changes.balance) details.push(`New Balance: Rs. ${changes.balance}`);
-            if (changes.type) details.push(`Type: ${changes.type}`);
+        // Inventory-related actions
+        else if (action.includes("INVENTORY")) {
+            if (changes.previousQuantity !== undefined) details.push(`Prev: ${changes.previousQuantity}`);
+            if (changes.newQuantity !== undefined) details.push(`New: ${changes.newQuantity}`);
+            if (changes.quantityChange !== undefined) details.push(`Change: ${changes.quantityChange}`);
+            if (changes.reason) details.push(`Reason: ${changes.reason}`);
         }
         // Generic fallback
         else {
             Object.keys(changes).forEach(key => {
-                if (key !== "order_id" && key !== "entity_id" && changes[key] !== null && changes[key] !== undefined) {
+                if (key !== "order_id" && key !== "entity_id" && !key.includes("_id") && changes[key] !== null && changes[key] !== undefined && typeof changes[key] !== 'object') {
                     details.push(`${key}: ${changes[key]}`);
                 }
             });
@@ -77,9 +83,20 @@ export default function AuditLogsPage() {
             key: "action",
             header: "Action",
             sortable: true,
-            render: (log) => (
-                <Badge variant="outline">{log.action}</Badge>
-            )
+            render: (log) => {
+                const action = log.action;
+                let variant: "default" | "outline" | "secondary" | "destructive" = "outline";
+
+                if (action.includes("CREATED") || action.includes("APPROVED")) variant = "default";
+                if (action.includes("DELETED") || action.includes("REJECTED")) variant = "destructive";
+                if (action.includes("PAYMENT")) variant = "secondary";
+
+                return (
+                    <Badge variant={variant} className="whitespace-nowrap">
+                        {action.replace(/_/g, " ")}
+                    </Badge>
+                );
+            }
         },
         {
             key: "entity_type",
