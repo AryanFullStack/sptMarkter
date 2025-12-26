@@ -69,7 +69,7 @@ export default function ShopDetailPage() {
 
         try {
             const [clientStatus, ledgerStatus, brandsRes, addrRes] = await Promise.all([
-                getClientFinancialStatus(shopId),
+                getClientFinancialStatus(shopId, user.id),
                 getSalesmanShopLedger(user.id, shopId),
                 getAssignedBrands(user.id),
                 supabase.from("addresses").select("*").eq("user_id", shopId).order("is_default", { ascending: false })

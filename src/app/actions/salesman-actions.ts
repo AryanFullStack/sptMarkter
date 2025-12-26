@@ -256,7 +256,7 @@ export async function getSalesmanRouteToday(salesmanId: string) {
 /**
  * Get complete financial status for a client
  */
-export async function getClientFinancialStatus(clientId: string) {
+export async function getClientFinancialStatus(clientId: string, filterBySalesmanId?: string) {
   const supabase = createAdminClient();
   if (!supabase) throw new Error("Admin client unavailable");
 
@@ -285,6 +285,7 @@ export async function getClientFinancialStatus(clientId: string) {
       payment_status,
       status,
       created_at,
+      recorded_by,
       payments (*)
     `)
     .eq("user_id", clientId)
@@ -296,15 +297,20 @@ export async function getClientFinancialStatus(clientId: string) {
     return { error: "Failed to fetch orders" };
   }
 
-  // Calculate pending total
+  // Calculate pending total (GLOBAL - from ALL salesmen)
   const currentPending = orders?.reduce((sum, order) => sum + Number(order.pending_amount || 0), 0) || 0;
 
   const pendingLimit = Number(user.pending_amount_limit || 0);
   const remainingLimit = Math.max(0, pendingLimit - currentPending);
 
+  // Filter orders for display if requested
+  const displayOrders = filterBySalesmanId 
+    ? orders?.filter(o => o.recorded_by === filterBySalesmanId) 
+    : orders;
+
   return {
     user,
-    orders,
+    orders: displayOrders,
     financialSummary: {
       totalLifetimeValue: 0, // Unused
       totalPaid: 0,          // Unused
