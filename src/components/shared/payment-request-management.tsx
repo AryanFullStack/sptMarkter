@@ -100,6 +100,11 @@ export function PaymentRequestManagement({ salesmanId }: PaymentRequestManagemen
                                             <span className="text-xs text-muted-foreground capitalize">
                                                 {req.order?.user?.role?.replace("_", " ")}
                                             </span>
+                                            {req.recorded_by_user && (
+                                                <div className="mt-1 flex items-center gap-1 text-[10px] text-[#C77D2E] border-t pt-1 border-gray-100 italic">
+                                                    <User className="h-2 w-2" /> Requested by: {req.recorded_by_user.full_name} ({req.recorded_by_user.role?.replace("_", " ")})
+                                                </div>
+                                            )}
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -108,9 +113,11 @@ export function PaymentRequestManagement({ salesmanId }: PaymentRequestManagemen
                                             <span className="text-xs flex items-center gap-1 text-purple-600">
                                                 <Tag className="h-3 w-3" /> {
                                                     req.order?.brand?.name ||
-                                                    (req.order?.items && Array.isArray(req.order.items) && req.order.items.length > 0
-                                                        ? (req.order.items[0].brand_name || "Assigned Brand")
-                                                        : "N/A")
+                                                    (req.order?.order_items && Array.isArray(req.order.order_items) && req.order.order_items.length > 0 && req.order.order_items[0].product?.brand?.name
+                                                        ? req.order.order_items[0].product.brand.name
+                                                        : (req.order?.items && Array.isArray(req.order.items) && req.order.items.length > 0
+                                                            ? (req.order.items[0].brand_name || "Unbranded")
+                                                            : "N/A"))
                                                 }
                                             </span>
                                         </div>
