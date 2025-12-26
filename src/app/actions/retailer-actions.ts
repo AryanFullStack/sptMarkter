@@ -104,23 +104,27 @@ export async function getRetailerDashboardData() {
       
       const current = brandMap.get(brandId) || { name: brandName, total: 0, count: 0 };
       
-      // Determine the best price to use
-      let price = Number(item.price || 0);
+      // Determine the best price to use - Prioritize historically recorded price
+      let price = Number(item.price || item.unit_price || 0);
 
-      // If we have product data, try to get the role-specific price
-      if (product) {
+      // Only if historical price is missing, try to fetch current role-specific price
+      if (price === 0) {
+        if (product) {
           if (userRole === 'beauty_parlor') {
-              price = product.price_beauty_parlor || price;
+            price = product.price_beauty_parlor || 0;
           } else if (userRole === 'retailer') {
-              price = product.price_retailer || price;
+            price = product.price_retailer || 0;
           }
-      } else if (isJsonSource) {
+          // Fallback to customer price if role price is missing
+          if (price === 0) price = product.price_customer || 0;
+        } else if (isJsonSource) {
           // If no product data but it's JSON (salesman order), check JSON-specific keys
           if (userRole === 'beauty_parlor') {
-              price = item.price_beauty_parlor || item.beauty_price || price;
+            price = item.price_beauty_parlor || item.beauty_price || 0;
           } else if (userRole === 'retailer') {
-              price = item.price_retailer || item.retailer_price || price;
+            price = item.price_retailer || item.retailer_price || 0;
           }
+        }
       }
       
       const qty = Number(item.quantity || 1);
