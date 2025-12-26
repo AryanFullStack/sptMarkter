@@ -428,17 +428,26 @@ export async function createOrderForClient(
   }
   */
 
+  let brandName = "Assigned Brand";
+
   // Verify brand assignment
   if (brandId) {
     const { data: assignment } = await supabase
       .from("salesman_brands")
-      .select("id")
+      .select("id, brands(name)")
       .eq("salesman_id", user.id)
       .eq("brand_id", brandId)
       .single();
       
     if (!assignment) {
       return { error: "Unauthorized: You are not assigned to this brand" };
+    }
+    
+    const brandsData = assignment.brands as any;
+    const brandNameFromDB = Array.isArray(brandsData) ? brandsData[0]?.name : brandsData?.name;
+    
+    if (brandNameFromDB) {
+        brandName = brandNameFromDB;
     }
   }
 
@@ -504,7 +513,10 @@ export async function createOrderForClient(
     order_number: orderNumber,
     user_id: clientId,
     status: "created",
-    items: items,
+    items: items.map(item => ({
+        ...item,
+        brand_name: brandName
+    })),
     subtotal,
     total_amount: totalAmount,
     paid_amount: paidAmount,
@@ -1019,13 +1031,24 @@ export async function getPaymentRequests(salesmanId?: string) {
       notes,
       created_at,
       status,
+      recorded_by_user:recorded_by (
+        id,
+        full_name,
+        role
+      ),
       order:order_id (
         id,
         order_number,
         pending_amount,
         items,
         user:user_id (id, full_name, role),
-        recorded_by_user:recorded_by (full_name)
+        order_items:order_items (
+          product:products (
+            brand:brands (
+              name
+            )
+          )
+        )
       )
     `)
     .eq("status", "pending")
