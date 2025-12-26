@@ -286,6 +286,7 @@ export async function getClientFinancialStatus(clientId: string, filterBySalesma
       status,
       created_at,
       recorded_by,
+      pending_payment_due_date,
       payments (*)
     `)
     .eq("user_id", clientId)
@@ -299,6 +300,16 @@ export async function getClientFinancialStatus(clientId: string, filterBySalesma
 
   // Calculate pending total (GLOBAL - from ALL salesmen)
   const currentPending = orders?.reduce((sum, order) => sum + Number(order.pending_amount || 0), 0) || 0;
+
+  // Check for overdue payments
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const hasOverduePayments = orders?.some(order => {
+    if (!order.pending_payment_due_date) return false;
+    const dueDate = new Date(order.pending_payment_due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate < today && Number(order.pending_amount) > 0;
+  }) || false;
 
   const pendingLimit = Number(user.pending_amount_limit || 0);
   const remainingLimit = Math.max(0, pendingLimit - currentPending);
@@ -317,6 +328,7 @@ export async function getClientFinancialStatus(clientId: string, filterBySalesma
       currentPending,
       pendingLimit,
       remainingLimit,
+      hasOverduePayments,
       limitUsagePercentage: pendingLimit > 0 ? (currentPending / pendingLimit) * 100 : 0,
     },
   };
@@ -365,7 +377,16 @@ export async function canCreateOrder(
     return { valid: true };
   }
 
-  const { currentPending, pendingLimit } = status.financialSummary;
+  const { currentPending, pendingLimit, hasOverduePayments } = status.financialSummary;
+
+  if (hasOverduePayments && newPending > 0) {
+    return {
+      valid: false,
+      error: "New order cannot be placed because this client has OVERDUE payments. Please clear previous dues first.",
+      hasOverdue: true
+    };
+  }
+
   const totalPendingAfterOrder = currentPending + newPending;
 
   if (totalPendingAfterOrder > pendingLimit) {
@@ -391,7 +412,8 @@ export async function createOrderForClient(
   paidAmount: number,
   brandId: string, // NEW: Added brandId
   notes?: string,
-  initialPaymentAmount?: number  // NEW: Optional initial payment for flexible split
+  initialPaymentAmount?: number,  // NEW: Optional initial payment for flexible split
+  paymentDue?: string | null // NEW: Payment Due Date
 ) {
   const supabaseAuth = await createClient();
   const {
@@ -526,6 +548,7 @@ export async function createOrderForClient(
     recorded_by: user.id,
     created_via: "salesman",
     notes: notes ? `${notes} (Brand ID: ${brandId})` : `Order created by salesman (Brand ID: ${brandId})`,
+    pending_payment_due_date: paymentDue, // Save due date
   };
 
   // If initial payment amount specified, apply split payment logic
@@ -581,6 +604,22 @@ export async function createOrderForClient(
       brand_id: brandId,
     },
   });
+
+  // NEW: Create payment reminder for the customer if due date is set
+  if (paymentDue && pendingAmount > 0) {
+    try {
+      await supabase.from("payment_reminders").insert({
+        order_id: order.id,
+        user_id: clientId,
+        reminder_type: "pending_due",
+        due_date: paymentDue,
+        amount: pendingAmount
+      });
+      console.log(`[createOrderForClient] Payment reminder created for order ${order.id}`);
+    } catch (reminderErr) {
+      console.error("Failed to create payment reminder:", reminderErr);
+    }
+  }
 
   revalidatePath("/salesman");
   revalidatePath("/admin");
@@ -754,7 +793,7 @@ export async function getSalesmanDashboardData(salesmanId: string) {
   // Get recent 10 orders for display with user details
   const { data: recentOrders } = await supabase
     .from("orders")
-    .select("id, order_number, total_amount, paid_amount, pending_amount, payment_status, status, created_at, user:user_id(id, full_name, email)")
+    .select("id, order_number, total_amount, paid_amount, pending_amount, payment_status, status, created_at, pending_payment_due_date, user:user_id(id, full_name, email)")
     .eq("recorded_by", salesmanId)
     .order("created_at", { ascending: false })
     .limit(10);

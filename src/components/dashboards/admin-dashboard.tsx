@@ -767,6 +767,7 @@ export default function AdminDashboard() {
                             <TableHead className="text-right">Commitment</TableHead>
                             <TableHead className="text-right">Current Paid</TableHead>
                             <TableHead className="text-right">Pending</TableHead>
+                            <TableHead className="text-center">Due Date</TableHead>
                             <TableHead className="text-center">Agent</TableHead>
                             <TableHead className="pr-6 text-right">Actions</TableHead>
                           </TableRow>
@@ -779,6 +780,18 @@ export default function AdminDashboard() {
                               <TableCell className="text-right font-medium">Rs. {Number(order.total_amount).toLocaleString()}</TableCell>
                               <TableCell className="text-right text-green-600 font-bold">Rs. {Number(order.paid_amount).toLocaleString()}</TableCell>
                               <TableCell className="text-right text-red-600 font-extrabold">Rs. {Number(order.pending_amount).toLocaleString()}</TableCell>
+                              <TableCell className="text-center text-xs">
+                                {order.pending_payment_due_date ? (
+                                  <Badge variant="outline" className={cn(
+                                    "font-bold",
+                                    new Date(order.pending_payment_due_date) < new Date() ? "border-red-500 text-red-600 bg-red-50" : "border-gray-300 text-gray-600"
+                                  )}>
+                                    {new Date(order.pending_payment_due_date).toLocaleDateString()}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-gray-400 italic">Not Set</span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-center text-[10px] font-semibold text-[#1A1A1A] uppercase tracking-tighter">
                                 {order.recorded_by_user?.full_name || "Nexus System"}
                               </TableCell>

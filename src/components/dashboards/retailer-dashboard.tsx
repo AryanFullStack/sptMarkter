@@ -12,9 +12,10 @@ import { ProfileForm } from "@/components/dashboards/profile-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getRetailerDashboardData, requestPayment } from "@/app/actions/retailer-actions";
 import { getPendingLimitInfo } from "@/app/actions/pending-limit-actions";
-import { getUpcomingPayments, getOverduePayments } from "@/app/actions/payment-schedule-actions";
+import { getUpcomingPayments, getOverduePayments, getPaymentReminders } from "@/app/actions/payment-schedule-actions";
 import { notify } from "@/lib/notifications";
 import { FinancialSummaryCard } from "@/components/shared/financial-summary-card";
+import { PaymentReminderAlert } from "@/components/shared/payment-reminder-alert";
 import { PaymentTimeline } from "@/components/shared/payment-timeline";
 import { PendingLimitWarning } from "@/components/shared/pending-limit-warning";
 import { OrderCardEnhanced } from "@/components/shared/order-card-enhanced";
@@ -28,6 +29,7 @@ export default function RetailerDashboard({ initialData }: { initialData?: any }
   const [pendingInfo, setPendingInfo] = useState<any>(initialData?.pendingInfo || null);
   const [upcomingPayments, setUpcomingPayments] = useState<any[]>(initialData?.upcomingPayments || []);
   const [overduePayments, setOverduePayments] = useState<any[]>(initialData?.overduePayments || []);
+  const [paymentReminders, setPaymentReminders] = useState<any[]>([]);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
@@ -55,15 +57,21 @@ export default function RetailerDashboard({ initialData }: { initialData?: any }
     async () => getOverduePayments(user.id, "retailer")
   );
 
+  const { data: remindersRes, mutate: mutateReminders } = useSWR(
+    user ? ['retailer-reminders', user.id] : null,
+    async () => getPaymentReminders(user.id, user.role || "retailer")
+  );
+
   useEffect(() => {
-    if (dashboardData && limitInfo && upcomingRes && overdueRes) {
+    if (dashboardData && limitInfo && upcomingRes && overdueRes && remindersRes) {
       setData(dashboardData);
       setPendingInfo(limitInfo);
       setUpcomingPayments(upcomingRes.payments || []);
       setOverduePayments(overdueRes.payments || []);
+      setPaymentReminders(remindersRes.reminders || []);
       setLoading(false);
     }
-  }, [dashboardData, limitInfo, upcomingRes, overdueRes]);
+  }, [dashboardData, limitInfo, upcomingRes, overdueRes, remindersRes]);
 
 
   // 2. Realtime Subscriptions
@@ -86,6 +94,7 @@ export default function RetailerDashboard({ initialData }: { initialData?: any }
           mutateLimit(); // Order change might affect pending limit
           mutateUpcoming();
           mutateOverdue();
+          mutateReminders();
           notify.info("Update", "Your order status has been updated.");
         }
       )
@@ -165,8 +174,16 @@ export default function RetailerDashboard({ initialData }: { initialData?: any }
   const { stats, brandSummary, recentOrders, payments } = data;
 
   return (
-    <div className="p-4 lg:p-10 space-y-10">
-      {/* Welcome Header */}
+    <div className="space-y-10 pb-20">
+      {/* Payment Reminders Alert */}
+      {paymentReminders.length > 0 && (
+        <PaymentReminderAlert
+          reminders={paymentReminders}
+          onDismiss={() => mutateReminders()}
+        />
+      )}
+
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#E8E8E8] pb-10">
         <div>
           <div className="flex items-center gap-3 mb-2">

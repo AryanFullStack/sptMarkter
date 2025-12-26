@@ -37,6 +37,8 @@ import { notify } from "@/lib/notifications";
 import { approveUserAction, deleteUserAction, markOrderPaidAction } from "@/app/admin/actions";
 import { Input } from "@/components/ui/input";
 import { PaymentRequestManagement } from "@/components/shared/payment-request-management";
+import { PaymentReminderAlert } from "@/components/shared/payment-reminder-alert";
+import { getPaymentReminders } from "@/app/actions/payment-schedule-actions";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +53,7 @@ export default function SubAdminPage() {
     });
     const [pendingPaymentOrders, setPendingPaymentOrders] = useState<any[]>([]);
     const [pendingUsers, setPendingUsers] = useState<any[]>([]);
+    const [paymentReminders, setPaymentReminders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
 
@@ -62,12 +65,12 @@ export default function SubAdminPage() {
 
     const { data: dashboardData, mutate: mutateDashboard } = useSWR(
         user ? ['sub-admin-dashboard', user.id] : null,
-        async () => {
+        async ([, userId]: [string, string]) => {
             // Fetch assigned orders with customer info
             const { data: assignedOrdersData } = await supabase
                 .from("orders")
                 .select("*, users(full_name)")
-                .eq("assigned_to", user!.id)
+                .eq("assigned_to", userId)
                 .order("created_at", { ascending: false });
 
             // Fetch pending users
@@ -78,7 +81,10 @@ export default function SubAdminPage() {
                 .is("approved", null)
                 .order("created_at", { ascending: false });
 
-            return { assignedOrdersData, pendingUsersData };
+            // Fetch reminders
+            const remindersRes = await getPaymentReminders(userId, "sub_admin");
+
+            return { assignedOrdersData, pendingUsersData, reminders: remindersRes.reminders || [] };
         }
     );
 
@@ -103,6 +109,7 @@ export default function SubAdminPage() {
 
             setPendingPaymentOrders(pendingPayments);
             setPendingUsers(pendingUsersData || []);
+            setPaymentReminders(dashboardData.reminders || []);
             setLoading(false);
         }
     }, [dashboardData]);
@@ -114,7 +121,7 @@ export default function SubAdminPage() {
 
         // Listen for assignments to ME
         const assignmentsChannel = supabase.channel('sub-admin-orders')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${user.id}` }, () => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${user!.id}` }, () => {
                 mutateDashboard();
                 toast({ title: "Update", description: "Your assigned orders have changed." });
             })
@@ -182,6 +189,14 @@ export default function SubAdminPage() {
 
     return (
         <div className="space-y-10">
+            {/* Payment Reminders */}
+            {paymentReminders.length > 0 && (
+                <PaymentReminderAlert
+                    reminders={paymentReminders}
+                    onDismiss={() => mutateDashboard()}
+                />
+            )}
+
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#E8E8E8] pb-8">
                 <div>
@@ -419,6 +434,7 @@ export default function SubAdminPage() {
                                                         <TableHead className="pl-6 py-4">Ref</TableHead>
                                                         <TableHead>Total</TableHead>
                                                         <TableHead>Outstanding</TableHead>
+                                                        <TableHead>Due Date</TableHead>
                                                         <TableHead className="pr-6 text-right">Authorization</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
@@ -428,6 +444,18 @@ export default function SubAdminPage() {
                                                             <TableCell className="pl-6 py-6 font-mono font-bold text-xs">#{order.order_number || order.id.slice(0, 8)}</TableCell>
                                                             <TableCell>Rs. {Number(order.total_amount).toLocaleString()}</TableCell>
                                                             <TableCell className="text-red-600 font-extrabold">Rs. {Number(order.pending_amount).toLocaleString()}</TableCell>
+                                                            <TableCell className="text-xs">
+                                                                {order.pending_payment_due_date ? (
+                                                                    <Badge variant="outline" className={cn(
+                                                                        "font-bold",
+                                                                        new Date(order.pending_payment_due_date) < new Date() ? "border-red-500 text-red-600 bg-red-50" : "border-gray-300 text-gray-600"
+                                                                    )}>
+                                                                        {new Date(order.pending_payment_due_date).toLocaleDateString()}
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <span className="text-gray-400 italic">Not Set</span>
+                                                                )}
+                                                            </TableCell>
                                                             <TableCell className="pr-6 text-right">
                                                                 <Button
                                                                     size="sm"

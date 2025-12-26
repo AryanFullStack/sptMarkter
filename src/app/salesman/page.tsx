@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { getSalesmanDashboardData, getOrderDetails, getSalesmanRouteToday, getSalesmanAssignedShops } from "@/app/actions/salesman-actions";
-import { getUpcomingPayments, getOverduePayments } from "@/app/actions/payment-schedule-actions";
+import { getUpcomingPayments, getOverduePayments, getPaymentReminders } from "@/app/actions/payment-schedule-actions";
 import { notify } from "@/lib/notifications";
+import { PaymentReminderAlert } from "@/components/shared/payment-reminder-alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,6 +23,7 @@ export default function SalesmanOverview() {
     const [weeklySchedule, setWeeklySchedule] = useState<any[]>([]);
     const [upcomingPayments, setUpcomingPayments] = useState<any[]>([]);
     const [overduePayments, setOverduePayments] = useState<any[]>([]);
+    const [paymentReminders, setPaymentReminders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -60,16 +62,22 @@ export default function SalesmanOverview() {
         () => getOverduePayments(userData!.id, "salesman")
     );
 
+    const { data: remindersRes, mutate: mutateReminders } = useSWR(
+        userData ? ['salesman-payment-reminders', userData.id] : null,
+        () => getPaymentReminders(userData!.id, "salesman")
+    );
+
     useEffect(() => {
-        if (dashboardData && routeRes && scheduleRes && upcomingRes && overdueRes) {
+        if (dashboardData && routeRes && scheduleRes && upcomingRes && overdueRes && remindersRes) {
             setData(dashboardData);
             setTodayRoute(routeRes.route || []);
             setWeeklySchedule(scheduleRes.shops || []);
             setUpcomingPayments(upcomingRes.payments || []);
             setOverduePayments(overdueRes.payments || []);
+            setPaymentReminders(remindersRes.reminders || []);
             setLoading(false);
         }
-    }, [dashboardData, routeRes, scheduleRes, upcomingRes, overdueRes]);
+    }, [dashboardData, routeRes, scheduleRes, upcomingRes, overdueRes, remindersRes]);
 
     // 3. Realtime Subscriptions
     useEffect(() => {
@@ -89,6 +97,7 @@ export default function SalesmanOverview() {
                     mutateDashboard(); // Refresh stats and recent orders
                     mutateUpcoming();   // Refresh payments if order changed
                     mutateOverdue();
+                    mutateReminders();
                 }
             )
             .subscribe();
@@ -149,7 +158,15 @@ export default function SalesmanOverview() {
     const { stats, brandPending, recentOrders, shopLedgers } = data;
 
     return (
-        <div className="space-y-8 pb-10">
+        <div className="space-y-10 pb-12">
+            {/* Payment Reminders Alert */}
+            {paymentReminders.length > 0 && (
+                <PaymentReminderAlert
+                    reminders={paymentReminders}
+                    onDismiss={() => mutateReminders()}
+                />
+            )}
+
             {/* Page Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -454,7 +471,12 @@ export default function SalesmanOverview() {
                                         <div className="text-right">
                                             <p className="font-bold text-[#1A1A1A]">Rs. {Number(order.total_amount).toLocaleString()}</p>
                                             {order.payment_status !== "paid" && Number(order.pending_amount) > 0 && (
-                                                <p className="text-[10px] font-bold text-red-500">Pending: Rs. {Number(order.pending_amount).toLocaleString()}</p>
+                                                <div className="flex flex-col items-end">
+                                                    <p className="text-[10px] font-bold text-red-500">Pending: Rs. {Number(order.pending_amount).toLocaleString()}</p>
+                                                    {order.pending_payment_due_date && (
+                                                        <p className="text-[10px] text-gray-400">Due: {new Date(order.pending_payment_due_date).toLocaleDateString()}</p>
+                                                    )}
+                                                </div>
                                             )}
                                             <Badge variant={order.payment_status === 'paid' ? 'default' : 'destructive'} className="text-[10px] h-5">
                                                 {order.payment_status?.toUpperCase()}

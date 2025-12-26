@@ -21,6 +21,7 @@ interface OrderCardEnhancedProps {
         payment_status: "pending" | "partial" | "paid";
         status: string;
         created_at: string;
+        pending_payment_due_date?: string;
         created_via?: "direct" | "salesman";
         recorded_by_user?: {
             full_name: string;
@@ -134,6 +135,37 @@ export function OrderCardEnhanced({
                         {getOrderStatusBadge(order.status)}
                     </div>
                 </div>
+
+                {/* Due Date Alert */}
+                {order.pending_amount > 0 && order.pending_payment_due_date && (
+                    <div className={cn(
+                        "rounded-md p-3 flex items-center gap-3 text-sm font-medium border",
+                        (() => {
+                            const due = new Date(order.pending_payment_due_date);
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            due.setHours(0, 0, 0, 0);
+
+                            if (due < today) return "bg-red-50 border-red-200 text-red-700"; // Overdue
+                            if (due.getTime() === today.getTime()) return "bg-yellow-50 border-yellow-200 text-yellow-800 animate-pulse"; // Due Today
+                            return "bg-blue-50 border-blue-200 text-blue-700"; // Future
+                        })()
+                    )}>
+                        <Clock className="h-4 w-4" />
+                        <span>
+                            {(() => {
+                                const due = new Date(order.pending_payment_due_date);
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                due.setHours(0, 0, 0, 0);
+
+                                if (due < today) return `Payment Overdue since ${formatDate(order.pending_payment_due_date)}`;
+                                if (due.getTime() === today.getTime()) return "Payment Due Today!";
+                                return `Payment Due: ${formatDate(order.pending_payment_due_date)}`;
+                            })()}
+                        </span>
+                    </div>
+                )}
 
                 {/* Financial Summary - Horizontal Grid */}
                 <div className="grid grid-cols-3 gap-6 py-4 border-y border-gray-50 bg-gray-50/30 -mx-6 px-6">

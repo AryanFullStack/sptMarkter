@@ -499,6 +499,7 @@ export async function loadAdminDashboardDataAction() {
         status, 
         created_at, 
         order_number, 
+        pending_payment_due_date,
         users:users!user_id(full_name),
         recorded_by_user:recorded_by(full_name)
      `)
