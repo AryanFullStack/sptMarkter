@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { createClient } from "@/supabase/client";
+import { useAuth } from "@/context/auth-context";
 
 interface CartItem {
     id: string;
@@ -39,65 +40,25 @@ const getProductPriceForRole = (product: any, role: string | null) => {
 
 export function CartProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<CartItem[]>([]);
-    const [userRole, setUserRole] = useState<string | null>(null);
+    const { userRole, loading: authLoading } = useAuth(); // Use global auth context
     const [isLoaded, setIsLoaded] = useState(false);
     const supabase = createClient();
 
-    // Function to fetch current user's role
-    const fetchUserRole = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (user) {
-            const { data: userData } = await supabase
-                .from("users")
-                .select("role")
-                .eq("id", user.id)
-                .single();
-
-            return userData?.role || null;
-        }
-        return null;
-    };
-
-    // Load cart from localStorage and fetch user role on mount
+    // Load cart from localStorage on mount
     useEffect(() => {
         const savedCart = localStorage.getItem("cart");
         if (savedCart) {
             setItems(JSON.parse(savedCart));
         }
-
-        const initAuth = async () => {
-            // Initial role fetch
-            const role = await fetchUserRole();
-            setUserRole(role);
-
-            // Set up auth state listener
-            const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-                if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
-                    const newRole = await fetchUserRole();
-                    setUserRole(newRole);
-                }
-            });
-
-            setIsLoaded(true);
-
-            return () => {
-                subscription.unsubscribe();
-            };
-        };
-
-        const cleanup = initAuth();
-        return () => {
-            cleanup.then(unsub => unsub?.());
-        };
+        setIsLoaded(true);
     }, []);
 
     // Effect to refresh cart prices when user role changes
     useEffect(() => {
-        if (isLoaded && items.length > 0) {
+        if (isLoaded && items.length > 0 && !authLoading) {
             refreshCartPrices(userRole);
         }
-    }, [userRole, isLoaded]);
+    }, [userRole, isLoaded, authLoading]);
 
     const refreshCartPrices = async (role: string | null) => {
         try {

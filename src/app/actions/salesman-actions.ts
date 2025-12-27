@@ -4,6 +4,7 @@ import { createAdminClient } from "@/supabase/admin";
 import { createClient } from "@/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/utils/audit-logger";
+import { createNotification, notifyAdmins, notifySubAdmins } from "@/lib/notification-service";
 
 /**
  * Get brands assigned to a salesman
@@ -636,6 +637,20 @@ export async function createOrderForClient(
     }
   }
 
+  // NEW: Notify admins and customer about the new order
+  try {
+    const { notifyOrderCreated } = await import("@/lib/notification-triggers");
+    await notifyOrderCreated(
+      order.id, 
+      clientId, 
+      user.id, 
+      orderNumber, 
+      totalAmount
+    );
+  } catch (error) {
+    console.error("Failed to send order notifications:", error);
+  }
+
   revalidatePath("/salesman");
   revalidatePath("/admin");
   revalidatePath("/dashboard");
@@ -761,6 +776,50 @@ export async function recordPartialPayment(
   revalidatePath("/sub-admin");
   revalidatePath("/sub-admin/orders");
   revalidatePath("/dashboard");
+
+  // NEW: Send Payment Notifications
+  try {
+    const { createNotification, notifyAdmins } = await import("@/lib/notification-service");
+    
+    // Get full order details for context
+    const { data: fullOrder } = await supabase
+      .from("orders")
+      .select("order_number")
+      .eq("id", orderId)
+      .single();
+
+    if (fullOrder) {
+      if (status === "pending") {
+        // Case 1: Payment Request (from Retailer/Parlor)
+        await notifyAdmins({
+          title: "New Payment Request",
+          message: `User requested approval for Rs. ${amount} payment on Order ${fullOrder.order_number}`,
+          event_type: "payment_received",
+          related_order_id: orderId,
+        });
+      } else {
+        // Case 2: Payment Recorded (by Salesman/Admin)
+        await createNotification({
+          user_id: order.user_id,
+          title: "Payment Received",
+          message: `Payment of Rs. ${amount} received for Order ${fullOrder.order_number}`,
+          event_type: "payment_received",
+          related_order_id: orderId,
+        });
+
+        if (userRole !== "admin" && userRole !== "sub_admin") {
+           await notifyAdmins({
+            title: "Payment Recorded",
+            message: `Rs. ${amount} recorded for Order ${fullOrder.order_number} by ${userRole}`,
+            event_type: "payment_received",
+            related_order_id: orderId,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Failed to send payment notifications:", error);
+  }
 
   return { success: true };
 }
@@ -1317,5 +1376,38 @@ export async function searchClients(query: string) {
     console.error("Error searching clients:", error);
     return { error: "Failed to search clients" };
   }
+}
+
+/**
+ * Unified loader for Salesman Dashboard (Optimized for performance)
+ */
+export async function getSalesmanUnifiedDashboard(salesmanId: string) {
+  const { getUpcomingPayments, getOverduePayments, getPaymentReminders } = await import("./payment-schedule-actions");
+  
+  // Execute all fetches in parallel
+  const [
+    dashboardData,
+    routeRes,
+    scheduleRes,
+    upcomingRes,
+    overdueRes,
+    remindersRes
+  ] = await Promise.all([
+    getSalesmanDashboardData(salesmanId),
+    getSalesmanRouteToday(salesmanId),
+    getSalesmanAssignedShops(salesmanId),
+    getUpcomingPayments(salesmanId, "salesman"),
+    getOverduePayments(salesmanId, "salesman"),
+    getPaymentReminders(salesmanId, "salesman")
+  ]);
+
+  return {
+    dashboardData,
+    todayRoute: routeRes.route || [],
+    weeklySchedule: scheduleRes.shops || [],
+    upcomingPayments: upcomingRes.payments || [],
+    overduePayments: overdueRes.payments || [],
+    paymentReminders: remindersRes.reminders || [],
+  };
 }
 

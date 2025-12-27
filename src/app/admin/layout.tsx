@@ -45,36 +45,114 @@ export default function AdminLayout({
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const supabase = createClient();
     const router = useRouter();
     const pathname = usePathname();
 
     useEffect(() => {
+        let mounted = true;
+
+        const checkAdmin = async () => {
+            try {
+                // Set a timeout to prevent indefinite loading
+                const timeoutId = setTimeout(() => {
+                    if (mounted) {
+                        console.error("Admin check timed out");
+                        setError("Connection timeout. Please refresh the page.");
+                        setLoading(false);
+                    }
+                }, 10000); // 10 second timeout
+
+                const {
+                    data: { user },
+                    error: authError
+                } = await supabase.auth.getUser();
+
+                clearTimeout(timeoutId);
+
+                if (authError || !user) {
+                    console.error("Auth error:", authError);
+                    if (mounted) {
+                        setLoading(false);
+                        router.push("/sign-in");
+                    }
+                    return;
+                }
+
+                const { data: userData, error: dbError } = await supabase
+                    .from("users")
+                    .select("role")
+                    .eq("id", user.id)
+                    .single();
+
+                if (dbError) {
+                    console.error("Database error:", dbError);
+                    if (mounted) {
+                        setError("Database connection error. Please try again.");
+                        setLoading(false);
+                    }
+                    return;
+                }
+
+                if (userData?.role !== "admin" && userData?.role !== "sub_admin") {
+                    if (mounted) {
+                        router.push("/dashboard");
+                        setLoading(false);
+                    }
+                    return;
+                }
+
+                if (mounted) {
+                    setIsAdmin(true);
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.error("Error checking admin status:", error);
+                if (mounted) {
+                    setError("An unexpected error occurred. Please try again.");
+                    setLoading(false);
+                }
+            }
+        };
+
         checkAdmin();
-    }, []);
 
-    async function checkAdmin() {
-        const {
-            data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-            router.push("/sign-in");
-            return;
-        }
+        return () => {
+            mounted = false;
+        };
+    }, [router, supabase]);
 
-        const { data: userData } = await supabase
-            .from("users")
-            .select("role")
-            .eq("id", user.id)
-            .single();
-
-        if (userData?.role !== "admin" && userData?.role !== "sub_admin") {
-            router.push("/dashboard");
-            return;
-        }
-
-        setIsAdmin(true);
-        setLoading(false);
+    if (error) {
+        return (
+            <div className="min-h-screen bg-[#FDFCF9] flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4 max-w-md mx-auto p-6">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                        <X className="w-8 h-8 text-red-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-[#1A1A1A]">Access Error</h2>
+                    <p className="text-[#6B6B6B] text-center">{error}</p>
+                    <div className="flex gap-3 mt-4">
+                        <Button
+                            onClick={() => {
+                                setError(null);
+                                setLoading(true);
+                                window.location.reload();
+                            }}
+                            className="bg-[#D4AF37] hover:bg-[#B8941F] text-white"
+                        >
+                            Retry
+                        </Button>
+                        <Button
+                            onClick={() => router.push("/sign-in")}
+                            variant="outline"
+                        >
+                            Sign In
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (loading) {

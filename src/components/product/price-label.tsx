@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/supabase/client";
+import { useProductPrice } from "@/hooks/use-product-price";
 
 interface PriceLabelProps {
     product: {
@@ -14,73 +13,18 @@ interface PriceLabelProps {
 }
 
 export function PriceLabel({ product, className = "", showLabel = false }: PriceLabelProps) {
-    const [userRole, setUserRole] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const supabase = createClient();
-
-    useEffect(() => {
-        async function getUserRole() {
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (user) {
-                const { data: userData } = await supabase
-                    .from("users")
-                    .select("role")
-                    .eq("id", user.id)
-                    .single();
-
-                setUserRole(userData?.role || null);
-            }
-            setIsLoading(false);
-        }
-
-        getUserRole();
-    }, []);
-
-    const getPrice = () => {
-        // Default: Show Beauty Parlor price
-        if (!userRole || isLoading) {
-            return product.price_beauty_parlor;
-        }
-
-        switch (userRole) {
-            case "beauty_parlor":
-                return product.price_beauty_parlor;
-            case "retailer":
-                return product.price_retailer;
-            case "customer":
-            case "local_customer":
-            default:
-                return product.price_customer;
-        }
-    };
-
-    const getRoleLabel = () => {
-        if (!userRole) return "Beauty Parlor Sale Price";
-
-        switch (userRole) {
-            case "beauty_parlor":
-                return "Your Beauty Parlor Price";
-            case "retailer":
-                return "Your Retailer Price";
-            default:
-                return "Customer Price";
-        }
-    };
-
-    const price = getPrice();
+    const { price, label, loading } = useProductPrice(product);
 
     return (
         <div className={className}>
             {showLabel && (
-                <p className="text-xs text-gray-500 mb-1">{getRoleLabel()}</p>
+                <p className="text-xs text-gray-500 mb-1">{label}</p>
             )}
             <span className="font-display text-2xl font-bold text-[#D4AF37]">
                 Rs. {price.toLocaleString()}
             </span>
-            {!userRole && !isLoading && (
-                <p className="text-xs text-gray-500 mt-1">Login for your custom pricing</p>
-            )}
+            {/* We could use userRole from context if we wanted to show login prompt, but hook covers most needs */
+            /* For now, keeping it simple */}
         </div>
     );
 }

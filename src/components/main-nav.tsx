@@ -14,7 +14,7 @@ import {
 } from "./ui/dropdown-menu";
 import { User, ShoppingCart, Heart, Menu, X, LogOut, Package, Home } from "lucide-react";
 import { useState, useEffect } from "react";
-import { createClient } from "@/supabase/client";
+import { useAuth } from "@/context/auth-context";
 import { useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
 import { Badge } from "./ui/badge";
@@ -22,23 +22,17 @@ import { Badge } from "./ui/badge";
 export function MainNav() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const supabase = createClient();
+  const { user, signOut } = useAuth();
   const { getCartCount } = useCart();
   const { items: wishlistItems } = useWishlist();
 
   const cartCount = getCartCount();
   const wishlistCount = wishlistItems.length;
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
-  }, []);
+  // No need for useEffect/createClient here as AuthContext handles it
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/";
+    await signOut();
   };
 
   const routes = [

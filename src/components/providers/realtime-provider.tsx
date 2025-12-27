@@ -55,6 +55,8 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
 
         // 2. Global Event Listener (System Wide)
         // Listens for high-level events that should trigger a toast globally
+        /* 
+        // DISABLED: Notifications are now handled by NotificationProvider
         const channel = supabase
             .channel("global-events")
             .on(
@@ -62,13 +64,11 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
                 {
                     event: "*",
                     schema: "public",
-                    table: "notifications", // Assuming a notifications table exists or we spy on specific tables
+                    table: "notifications",
                 },
                 (payload) => {
-                    // Generic handler - in production we'd filter this more strictly
                     if (payload.eventType === "INSERT") {
                         const newRecord = payload.new as any
-                        // Example: Show toast if a notification is meant for this user (filtering happens in RLS usually, but here client side for now if needed)
                         toast({
                             title: newRecord.title || "New Notification",
                             description: newRecord.message || "You have a new update.",
@@ -79,6 +79,7 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
             .subscribe()
 
         setChannels((prev) => [...prev, channel])
+        */
 
         return () => {
             subscription.unsubscribe()
