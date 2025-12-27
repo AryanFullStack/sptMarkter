@@ -100,6 +100,11 @@ export function PaymentRequestManagement({ salesmanId }: PaymentRequestManagemen
                                             <span className="text-xs text-muted-foreground capitalize">
                                                 {req.order?.user?.role?.replace("_", " ")}
                                             </span>
+                                            {req.order?.user?.assigned_salesman?.full_name && (
+                                                <div className="mt-1 flex items-center gap-1 text-[10px] text-blue-600 border-t pt-1 border-gray-100">
+                                                    <User className="h-2 w-2" /> Salesman: {req.order.user.assigned_salesman.full_name}
+                                                </div>
+                                            )}
                                             {req.recorded_by_user && (
                                                 <div className="mt-1 flex items-center gap-1 text-[10px] text-[#C77D2E] border-t pt-1 border-gray-100 italic">
                                                     <User className="h-2 w-2" /> Requested by: {req.recorded_by_user.full_name} ({req.recorded_by_user.role?.replace("_", " ")})
