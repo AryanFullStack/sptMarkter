@@ -389,7 +389,10 @@ export default function OrdersManagementPage() {
                   <Label className="mb-2 block">Order Items</Label>
                   <div className="space-y-3 border rounded-lg p-3 bg-gray-50 max-h-48 overflow-y-auto">
                     {(() => {
-                      const displayItems = selectedOrder.order_items_data || selectedOrder.items || [];
+                      const displayItems = (selectedOrder.order_items_data && selectedOrder.order_items_data.length > 0)
+                        ? selectedOrder.order_items_data
+                        : (selectedOrder.items || []);
+
                       if (displayItems.length === 0) {
                         return <p className="text-gray-500 italic">No items found.</p>;
                       }
