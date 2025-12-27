@@ -177,21 +177,29 @@ export default function CustomerDashboard() {
                 ) : (
                   <div className="divide-y divide-[#F7F5F2]">
                     {recentOrders.map((order) => (
-                      <div key={order.id} className="flex justify-between items-center p-6 hover:bg-[#FDFCF9] transition-colors group">
-                        <div className="flex gap-4 items-center">
-                          <div className="w-10 h-10 bg-[#F7F5F2] rounded-lg flex items-center justify-center font-mono text-xs font-bold text-[#1A1A1A]">#{order.order_number?.slice(-6) || order.id.slice(0, 6)}</div>
-                          <div>
-                            <p className="font-bold text-[#1A1A1A]">{new Date(order.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                            <p className="text-[10px] text-[#6B6B6B] uppercase tracking-widest font-bold">Standard Delivery</p>
+                      <div key={order.id} className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 p-6 hover:bg-[#FDFCF9] transition-colors group">
+                        <div className="flex gap-5 items-start md:items-center flex-1">
+                          <div className="min-w-12 h-12 bg-white rounded-xl flex items-center justify-center font-mono text-xs font-bold text-black shadow-sm border border-gray-100 px-2">
+                            #{order.order_number || order.id.slice(0, 6)}
+                          </div>
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-sm text-[#1A1A1A]">
+                                {new Date(order.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </p>
+                            </div>
+                            <p className="text-xs text-[#6B6B6B] font-medium">
+                              Standard Delivery
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-[#1A1A1A]">Rs. {order.total_amount.toLocaleString()}</p>
+                        <div className="flex md:flex-col items-start md:items-end justify-between md:justify-start gap-2 md:gap-2 md:text-right ml-16 md:ml-0">
+                          <p className="font-bold text-lg text-[#1A1A1A]">Rs. {Number(order.total_amount || 0).toLocaleString()}</p>
                           <Badge className={cn(
-                            "text-[9px] h-5 px-2 font-bold uppercase tracking-tight border shadow-none",
+                            "text-[10px] h-6 px-3 font-bold uppercase tracking-wide border shadow-none",
                             getStatusColor(order.status)
                           )}>
-                            {order.status}
+                            {order.status || 'pending'}
                           </Badge>
                         </div>
                       </div>

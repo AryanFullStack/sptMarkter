@@ -21,11 +21,15 @@ export function OrderInvoice({ order, onClose }: OrderInvoiceProps) {
     if (!order) return null;
 
     const customer = order.users || order.user;
-    const items = order.order_items_data || order.items || [];
+    // Flexible fallback: Use relational data only if it has items, otherwise fallback to JSON column
+    const items = (order.order_items_data && order.order_items_data.length > 0)
+        ? order.order_items_data
+        : (order.items || []);
     const shippingAddress = order.shipping_address;
 
     return (
         <div className="bg-white p-2 rounded-lg shadow-lg max-w-[80mm] mx-auto border print:shadow-none print:border-0 print:p-0">
+            {/* Action Buttons - Hidden during print */}
             {/* Action Buttons - Hidden during print */}
             <div className="flex justify-between items-center mb-4 print:hidden">
                 <h2 className="text-sm font-bold">80mm Invoice</h2>

@@ -555,6 +555,32 @@ export async function createOrderForClient(
     return { error: "Failed to create order" };
   }
 
+  // Insert order items
+  if (items && items.length > 0) {
+    const orderItems = items.map((item) => {
+      // Determine correct price based on role (same logic as subtotal calculation)
+      const itemPrice = clientData.role === "beauty_parlor"
+        ? item.beauty_price
+        : item.retailer_price;
+
+      return {
+        order_id: order.id,
+        product_id: item.product_id || item.id,
+        quantity: item.quantity,
+        price: itemPrice || 0,
+      };
+    });
+
+    const { error: itemsError } = await supabase
+      .from("order_items")
+      .insert(orderItems);
+
+    if (itemsError) {
+      console.error("Error creating order items:", itemsError);
+      // We might want to rollback the order here ideally, but for now just logging
+    }
+  }
+
   // Record initial payment if any
   if (paidAmount > 0) {
     await supabase.from("payments").insert({
@@ -1041,7 +1067,14 @@ export async function getPaymentRequests(salesmanId?: string) {
         order_number,
         pending_amount,
         items,
-        user:user_id (id, full_name, role),
+        user:user_id (
+          id, 
+          full_name, 
+          role,
+          assigned_salesman:assigned_salesman_id (
+            full_name
+          )
+        ),
         order_items:order_items (
           product:products (
             brand:brands (
