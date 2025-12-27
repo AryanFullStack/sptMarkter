@@ -3,6 +3,8 @@
 import { createAdminClient } from "@/supabase/admin";
 import { createClient } from "@/supabase/server";
 import { revalidatePath } from "next/cache";
+import { logAudit } from "@/utils/audit-logger";
+import { createNotification, notifyAdmins, notifySubAdmins } from "@/lib/notification-service";
 
 /**
  * Get brands assigned to a salesman
@@ -286,6 +288,7 @@ export async function getClientFinancialStatus(clientId: string, filterBySalesma
       status,
       created_at,
       recorded_by,
+      pending_payment_due_date,
       payments (*)
     `)
     .eq("user_id", clientId)
@@ -299,6 +302,16 @@ export async function getClientFinancialStatus(clientId: string, filterBySalesma
 
   // Calculate pending total (GLOBAL - from ALL salesmen)
   const currentPending = orders?.reduce((sum, order) => sum + Number(order.pending_amount || 0), 0) || 0;
+
+  // Check for overdue payments
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const hasOverduePayments = orders?.some(order => {
+    if (!order.pending_payment_due_date) return false;
+    const dueDate = new Date(order.pending_payment_due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate < today && Number(order.pending_amount) > 0;
+  }) || false;
 
   const pendingLimit = Number(user.pending_amount_limit || 0);
   const remainingLimit = Math.max(0, pendingLimit - currentPending);
@@ -317,6 +330,7 @@ export async function getClientFinancialStatus(clientId: string, filterBySalesma
       currentPending,
       pendingLimit,
       remainingLimit,
+      hasOverduePayments,
       limitUsagePercentage: pendingLimit > 0 ? (currentPending / pendingLimit) * 100 : 0,
     },
   };
@@ -365,7 +379,16 @@ export async function canCreateOrder(
     return { valid: true };
   }
 
-  const { currentPending, pendingLimit } = status.financialSummary;
+  const { currentPending, pendingLimit, hasOverduePayments } = status.financialSummary;
+
+  if (hasOverduePayments && newPending > 0) {
+    return {
+      valid: false,
+      error: "New order cannot be placed because this client has OVERDUE payments. Please clear previous dues first.",
+      hasOverdue: true
+    };
+  }
+
   const totalPendingAfterOrder = currentPending + newPending;
 
   if (totalPendingAfterOrder > pendingLimit) {
@@ -391,7 +414,8 @@ export async function createOrderForClient(
   paidAmount: number,
   brandId: string, // NEW: Added brandId
   notes?: string,
-  initialPaymentAmount?: number  // NEW: Optional initial payment for flexible split
+  initialPaymentAmount?: number,  // NEW: Optional initial payment for flexible split
+  paymentDue?: string | null // NEW: Payment Due Date
 ) {
   const supabaseAuth = await createClient();
   const {
@@ -526,6 +550,7 @@ export async function createOrderForClient(
     recorded_by: user.id,
     created_via: "salesman",
     notes: notes ? `${notes} (Brand ID: ${brandId})` : `Order created by salesman (Brand ID: ${brandId})`,
+    pending_payment_due_date: paymentDue, // Save due date
   };
 
   // If initial payment amount specified, apply split payment logic
@@ -607,6 +632,50 @@ export async function createOrderForClient(
       brand_id: brandId,
     },
   });
+
+  // Log to centralized audit_logs
+  await logAudit({
+    action: "ORDER_CREATED",
+    entity_type: "order",
+    entity_id: order.id,
+    changes: {
+      client_id: clientId,
+      order_number: orderNumber,
+      total_amount: totalAmount,
+      paid_amount: paidAmount,
+      brand_id: brandId,
+    },
+  });
+
+  // NEW: Create payment reminder for the customer if due date is set
+  if (paymentDue && pendingAmount > 0) {
+    try {
+      await supabase.from("payment_reminders").insert({
+        order_id: order.id,
+        user_id: clientId,
+        reminder_type: "pending_due",
+        due_date: paymentDue,
+        amount: pendingAmount
+      });
+      console.log(`[createOrderForClient] Payment reminder created for order ${order.id}`);
+    } catch (reminderErr) {
+      console.error("Failed to create payment reminder:", reminderErr);
+    }
+  }
+
+  // NEW: Notify admins and customer about the new order
+  try {
+    const { notifyOrderCreated } = await import("@/lib/notification-triggers");
+    await notifyOrderCreated(
+      order.id, 
+      clientId, 
+      user.id, 
+      orderNumber, 
+      totalAmount
+    );
+  } catch (error) {
+    console.error("Failed to send order notifications:", error);
+  }
 
   revalidatePath("/salesman");
   revalidatePath("/admin");
@@ -714,12 +783,69 @@ export async function recordPartialPayment(
     },
   });
 
+  // Log to centralized audit_logs
+  await logAudit({
+    action: status === "pending" ? "PAYMENT_REQUESTED" : "PAYMENT_RECORDED",
+    entity_type: "payment",
+    entity_id: orderId, // Or we could get the payment ID if needed, but orderId is the main context here
+    changes: {
+      amount,
+      payment_method: paymentMethod,
+      notes,
+      status
+    },
+  });
+
   revalidatePath("/salesman");
   revalidatePath("/admin");
   revalidatePath("/admin/orders");
   revalidatePath("/sub-admin");
   revalidatePath("/sub-admin/orders");
   revalidatePath("/dashboard");
+
+  // NEW: Send Payment Notifications
+  try {
+    const { createNotification, notifyAdmins } = await import("@/lib/notification-service");
+    
+    // Get full order details for context
+    const { data: fullOrder } = await supabase
+      .from("orders")
+      .select("order_number")
+      .eq("id", orderId)
+      .single();
+
+    if (fullOrder) {
+      if (status === "pending") {
+        // Case 1: Payment Request (from Retailer/Parlor)
+        await notifyAdmins({
+          title: "New Payment Request",
+          message: `User requested approval for Rs. ${amount} payment on Order ${fullOrder.order_number}`,
+          event_type: "payment_received",
+          related_order_id: orderId,
+        });
+      } else {
+        // Case 2: Payment Recorded (by Salesman/Admin)
+        await createNotification({
+          user_id: order.user_id,
+          title: "Payment Received",
+          message: `Payment of Rs. ${amount} received for Order ${fullOrder.order_number}`,
+          event_type: "payment_received",
+          related_order_id: orderId,
+        });
+
+        if (userRole !== "admin" && userRole !== "sub_admin") {
+           await notifyAdmins({
+            title: "Payment Recorded",
+            message: `Rs. ${amount} recorded for Order ${fullOrder.order_number} by ${userRole}`,
+            event_type: "payment_received",
+            related_order_id: orderId,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Failed to send payment notifications:", error);
+  }
 
   return { success: true };
 }
@@ -780,7 +906,7 @@ export async function getSalesmanDashboardData(salesmanId: string) {
   // Get recent 10 orders for display with user details
   const { data: recentOrders } = await supabase
     .from("orders")
-    .select("id, order_number, total_amount, paid_amount, pending_amount, payment_status, status, created_at, user:user_id(id, full_name, email)")
+    .select("id, order_number, total_amount, paid_amount, pending_amount, payment_status, status, created_at, pending_payment_due_date, user:user_id(id, full_name, email)")
     .eq("recorded_by", salesmanId)
     .order("created_at", { ascending: false })
     .limit(10);
@@ -1283,5 +1409,38 @@ export async function searchClients(query: string) {
     console.error("Error searching clients:", error);
     return { error: "Failed to search clients" };
   }
+}
+
+/**
+ * Unified loader for Salesman Dashboard (Optimized for performance)
+ */
+export async function getSalesmanUnifiedDashboard(salesmanId: string) {
+  const { getUpcomingPayments, getOverduePayments, getPaymentReminders } = await import("./payment-schedule-actions");
+  
+  // Execute all fetches in parallel
+  const [
+    dashboardData,
+    routeRes,
+    scheduleRes,
+    upcomingRes,
+    overdueRes,
+    remindersRes
+  ] = await Promise.all([
+    getSalesmanDashboardData(salesmanId),
+    getSalesmanRouteToday(salesmanId),
+    getSalesmanAssignedShops(salesmanId),
+    getUpcomingPayments(salesmanId, "salesman"),
+    getOverduePayments(salesmanId, "salesman"),
+    getPaymentReminders(salesmanId, "salesman")
+  ]);
+
+  return {
+    dashboardData,
+    todayRoute: routeRes.route || [],
+    weeklySchedule: scheduleRes.shops || [],
+    upcomingPayments: upcomingRes.payments || [],
+    overduePayments: overdueRes.payments || [],
+    paymentReminders: remindersRes.reminders || [],
+  };
 }
 

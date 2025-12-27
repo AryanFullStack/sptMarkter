@@ -5,48 +5,29 @@ import { useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
 import { notify } from "@/lib/notifications";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/supabase/client";
-import { useEffect, useState } from "react";
+import { useAuth } from "@/context/auth-context";
 
 interface ProductGridProps {
     products: any[];
+    initialUserRole?: string | null;
 }
 
-export function ProductGrid({ products }: ProductGridProps) {
+export function ProductGrid({ products, initialUserRole }: ProductGridProps) {
     const { addToCart } = useCart();
     const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
     const router = useRouter();
-    const supabase = createClient();
-    const [userRole, setUserRole] = useState<string | null>(null);
-    const [isLoadingRole, setIsLoadingRole] = useState(true);
 
-    useEffect(() => {
-        async function getUserRole() {
-            const { data: { user } } = await supabase.auth.getUser();
+    // Use client-side auth, but fallback to server-provided role if auth is loading or not yet ready
+    const { userRole: clientUserRole, loading: isAuthLoading } = useAuth();
 
-            if (user) {
-                const { data: userData } = await supabase
-                    .from("users")
-                    .select("role")
-                    .eq("id", user.id)
-                    .single();
-
-                setUserRole(userData?.role || null);
-            }
-            setIsLoadingRole(false);
-        }
-
-        getUserRole();
-    }, []);
+    // Prioritize client role if loaded, otherwise use server role
+    const effectiveRole = isAuthLoading ? initialUserRole : clientUserRole;
 
     const getProductPrice = (product: any) => {
-        // If not logged in or still loading, show customer price as default
-        if (!userRole || isLoadingRole) {
-            return product.price_customer || 0;
-        }
+        // If no role found (not logged in), use customer price
+        const role = effectiveRole || 'customer';
 
-        // Return price based on user role
-        switch (userRole) {
+        switch (role) {
             case "beauty_parlor":
                 return product.price_beauty_parlor || 0;
             case "retailer":
@@ -65,10 +46,7 @@ export function ProductGrid({ products }: ProductGridProps) {
     };
 
     const handleToggleWishlist = async (product: any) => {
-        // Check if user is logged in
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (!user) {
+        if (!effectiveRole) {
             notify.error("Login required", "Please login to add items to wishlist.");
             router.push("/sign-in");
             return;

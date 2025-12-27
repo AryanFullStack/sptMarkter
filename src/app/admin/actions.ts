@@ -4,6 +4,7 @@ import { createClient } from "../../../supabase/server";
 import { createAdminClient } from "@/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "@/utils/audit-logger";
+import { createNotification, notifyAdmins, notifySubAdmins } from "@/lib/notification-service";
 
 const checkPermissions = async (allowedRoles: string[]) => {
     const supabase = await createClient();
@@ -367,6 +368,32 @@ export async function recordPayment(paymentData: {
     changes: { ...paymentData, newPaidAmount, newPendingAmount },
   });
 
+  // Fetch order details for notification
+  const { data: fullOrder } = await supabaseAdmin
+    .from("orders")
+    .select("user_id, order_number, recorded_by")
+    .eq("id", paymentData.order_id)
+    .single();
+
+  // Notify the customer about payment received
+  if (fullOrder) {
+    await createNotification({
+      user_id: fullOrder.user_id,
+      title: "Payment Received",
+      message: `Payment of Rs. ${paymentData.amount} received for order ${fullOrder.order_number}. Remaining: Rs. ${newPendingAmount.toFixed(2)}`,
+      event_type: "payment_received",
+      related_order_id: paymentData.order_id,
+    });
+
+    // Notify admin staff
+    await notifyAdmins({
+      title: "Payment Recorded",
+      message: `Rs. ${paymentData.amount} payment recorded for order ${fullOrder.order_number}`,
+      event_type: "payment_received",
+      related_order_id: paymentData.order_id,
+    });
+  }
+
   revalidatePath("/admin");
   revalidatePath("/admin/payments");
   revalidatePath("/admin/orders");
@@ -400,6 +427,25 @@ export async function updateOrderStatus(orderId: string, status: string) {
     entity_id: orderId,
     changes: { status },
   }, supabaseAdmin); // Pass admin client to bypass RLS in audit log if needed
+
+  // Fetch order details for notification
+  const { data: orderDetails } = await supabaseAdmin
+    .from("orders")
+    .select("user_id, order_number")
+    .eq("id", orderId)
+    .single();
+
+  // Notify customer about order status change
+  if (orderDetails) {
+    const statusDisplay = status.replace('_', ' ').charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+    await createNotification({
+      user_id: orderDetails.user_id,
+      title: "Order Status Updated",
+      message: `Your order ${orderDetails.order_number} is now ${statusDisplay}`,
+      event_type: "order_status_updated",
+      related_order_id: orderId,
+    });
+  }
 
   revalidatePath("/admin/orders");
   revalidatePath("/sub-admin/orders");
@@ -499,6 +545,7 @@ export async function loadAdminDashboardDataAction() {
         status, 
         created_at, 
         order_number, 
+        pending_payment_due_date,
         users:users!user_id(full_name),
         recorded_by_user:recorded_by(full_name)
      `)
@@ -707,6 +754,12 @@ export async function deleteUserAction(userId: string) {
         // Just in case cascade isn't working as expected or we want to be explicit
         await supabase.from("users").delete().eq("id", userId);
     }
+
+    await logAudit({
+        action: "USER_DELETED",
+        entity_type: "user",
+        entity_id: userId,
+    });
     
     console.log("[deleteUserAction] Success");
     revalidatePath("/admin");
@@ -721,10 +774,43 @@ export async function updateUserRoleAction(userId: string, role: string) {
     const supabase = createAdminClient();
     if (!supabase) throw new Error("Admin client unavailable");
 
+    // Get current user data for notification
+    const { data: userData } = await supabase
+        .from("users")
+        .select("full_name, email, role")
+        .eq("id", userId)
+        .single();
+
     const { error } = await supabase.from("users").update({ role }).eq("id", userId);
     if (error) {
         console.error("[updateUserRoleAction] Error:", error);
         throw new Error(error.message);
+    }
+
+    await logAudit({
+        action: "USER_ROLE_UPDATED",
+        entity_type: "user",
+        entity_id: userId,
+        changes: { role },
+    });
+
+    // Notify user of role change
+    if (userData) {
+        await createNotification({
+            user_id: userId,
+            title: "Role Updated",
+            message: `Your role has been changed from ${userData.role.replace('_', ' ')} to ${role.replace('_', ' ')}.`,
+            event_type: "user_role_updated",
+            related_user_id: userId,
+        });
+
+        // Notify admins
+        await notifyAdmins({
+            title: "User Role Updated",
+            message: `${userData.full_name || userData.email} role changed to ${role.replace('_', ' ')}.`,
+            event_type: "user_role_updated",
+            related_user_id: userId,
+        });
     }
     
     console.log("[updateUserRoleAction] Success");
@@ -740,6 +826,13 @@ export async function approveUserAction(userId: string) {
     const supabase = createAdminClient();
     if (!supabase) throw new Error("Admin client unavailable");
 
+    // Get user details for notification
+    const { data: userData } = await supabase
+        .from("users")
+        .select("full_name, email, role")
+        .eq("id", userId)
+        .single();
+
     const { error } = await supabase
         .from("users")
         .update({ approved: true })
@@ -748,6 +841,32 @@ export async function approveUserAction(userId: string) {
     if (error) {
         console.error("[approveUserAction] Error:", error);
         throw new Error(error.message);
+    }
+
+    await logAudit({
+        action: "USER_APPROVED",
+        entity_type: "user",
+        entity_id: userId,
+        changes: { approved: true },
+    });
+
+    // Notify the user that they were approved
+    if (userData) {
+        await createNotification({
+            user_id: userId,
+            title: "Account Approved",
+            message: `Your ${userData.role.replace('_', ' ')} account has been approved. You can now access all features.`,
+            event_type: "user_approved",
+            related_user_id: userId,
+        });
+
+        // Notify admins about the approval
+        await notifyAdmins({
+            title: "User Approved",
+            message: `${userData.full_name || userData.email} has been approved as ${userData.role.replace('_', ' ')}.`,
+            event_type: "user_approved",
+            related_user_id: userId,
+        });
     }
     
     console.log("[approveUserAction] Success");

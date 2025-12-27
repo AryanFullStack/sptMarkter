@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { createClient } from "@/supabase/client";
 import {
     ShoppingCart,
@@ -32,13 +33,17 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { notify } from "@/lib/notifications";
 import { approveUserAction, deleteUserAction, markOrderPaidAction } from "@/app/admin/actions";
 import { Input } from "@/components/ui/input";
 import { PaymentRequestManagement } from "@/components/shared/payment-request-management";
+import { PaymentReminderAlert } from "@/components/shared/payment-reminder-alert";
+import { getPaymentReminders } from "@/app/actions/payment-schedule-actions";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function SubAdminPage() {
+    const { toast } = useToast();
     const [stats, setStats] = useState({
         assignedOrders: 0,
         pendingOrders: 0,
@@ -48,26 +53,24 @@ export default function SubAdminPage() {
     });
     const [pendingPaymentOrders, setPendingPaymentOrders] = useState<any[]>([]);
     const [pendingUsers, setPendingUsers] = useState<any[]>([]);
+    const [paymentReminders, setPaymentReminders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const supabase = createClient();
 
-    useEffect(() => {
-        loadDashboardData();
-    }, []);
+    // 1. SWR Fetch
+    const { data: user } = useSWR('user', async () => {
+        const { data } = await supabase.auth.getUser();
+        return data.user;
+    });
 
-    async function loadDashboardData() {
-        setLoading(true);
-        try {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser();
-            if (!user) return;
-
+    const { data: dashboardData, mutate: mutateDashboard } = useSWR(
+        user ? ['sub-admin-dashboard', user.id] : null,
+        async ([, userId]: [string, string]) => {
             // Fetch assigned orders with customer info
             const { data: assignedOrdersData } = await supabase
                 .from("orders")
                 .select("*, users(full_name)")
-                .eq("assigned_to", user.id)
+                .eq("assigned_to", userId)
                 .order("created_at", { ascending: false });
 
             // Fetch pending users
@@ -78,12 +81,23 @@ export default function SubAdminPage() {
                 .is("approved", null)
                 .order("created_at", { ascending: false });
 
+            // Fetch reminders
+            const remindersRes = await getPaymentReminders(userId, "sub_admin");
+
+            return { assignedOrdersData, pendingUsersData, reminders: remindersRes.reminders || [] };
+        }
+    );
+
+    useEffect(() => {
+        if (dashboardData) {
+            const { assignedOrdersData, pendingUsersData } = dashboardData;
+
             // Calculate stats
             const assignedOrdersCount = assignedOrdersData?.length || 0;
             const pendingPayments = assignedOrdersData?.filter(
-                order => (order.pending_amount > 0 || order.payment_status === 'pending_payment' || order.status === 'pending_payment')
+                (order: any) => (order.pending_amount > 0 || order.payment_status === 'pending_payment' || order.status === 'pending_payment')
             ) || [];
-            const pendingOrdersCount = assignedOrdersData?.filter(o => o.status === 'pending').length || 0;
+            const pendingOrdersCount = assignedOrdersData?.filter((o: any) => o.status === 'pending').length || 0;
 
             setStats({
                 assignedOrders: assignedOrdersCount,
@@ -95,11 +109,40 @@ export default function SubAdminPage() {
 
             setPendingPaymentOrders(pendingPayments);
             setPendingUsers(pendingUsersData || []);
-        } catch (error) {
-            console.error("Error loading dashboard data:", error);
-            notify.error("Sync Error", "Failed to load operational data");
+            setPaymentReminders(dashboardData.reminders || []);
+            setLoading(false);
         }
-        setLoading(false);
+    }, [dashboardData]);
+
+
+    // 2. Realtime Subscriptions
+    useEffect(() => {
+        if (!user) return;
+
+        // Listen for assignments to ME
+        const assignmentsChannel = supabase.channel('sub-admin-orders')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `assigned_to=eq.${user!.id}` }, () => {
+                mutateDashboard();
+                toast({ title: "Update", description: "Your assigned orders have changed." });
+            })
+            .subscribe();
+
+        // Listen for new users needing approval
+        const usersChannel = supabase.channel('sub-admin-users')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+                mutateDashboard();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(assignmentsChannel);
+            supabase.removeChannel(usersChannel);
+        };
+    }, [user, supabase, mutateDashboard]);
+
+    // Stub for handlers
+    async function loadDashboardData() {
+        mutateDashboard();
     }
 
     const handleApproveUser = async (userId: string) => {
@@ -146,6 +189,14 @@ export default function SubAdminPage() {
 
     return (
         <div className="space-y-10">
+            {/* Payment Reminders */}
+            {paymentReminders.length > 0 && (
+                <PaymentReminderAlert
+                    reminders={paymentReminders}
+                    onDismiss={() => mutateDashboard()}
+                />
+            )}
+
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-[#E8E8E8] pb-8">
                 <div>
@@ -383,6 +434,7 @@ export default function SubAdminPage() {
                                                         <TableHead className="pl-6 py-4">Ref</TableHead>
                                                         <TableHead>Total</TableHead>
                                                         <TableHead>Outstanding</TableHead>
+                                                        <TableHead>Due Date</TableHead>
                                                         <TableHead className="pr-6 text-right">Authorization</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
@@ -392,6 +444,18 @@ export default function SubAdminPage() {
                                                             <TableCell className="pl-6 py-6 font-mono font-bold text-xs">#{order.order_number || order.id.slice(0, 8)}</TableCell>
                                                             <TableCell>Rs. {Number(order.total_amount).toLocaleString()}</TableCell>
                                                             <TableCell className="text-red-600 font-extrabold">Rs. {Number(order.pending_amount).toLocaleString()}</TableCell>
+                                                            <TableCell className="text-xs">
+                                                                {order.pending_payment_due_date ? (
+                                                                    <Badge variant="outline" className={cn(
+                                                                        "font-bold",
+                                                                        new Date(order.pending_payment_due_date) < new Date() ? "border-red-500 text-red-600 bg-red-50" : "border-gray-300 text-gray-600"
+                                                                    )}>
+                                                                        {new Date(order.pending_payment_due_date).toLocaleDateString()}
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <span className="text-gray-400 italic">Not Set</span>
+                                                                )}
+                                                            </TableCell>
                                                             <TableCell className="pr-6 text-right">
                                                                 <Button
                                                                     size="sm"

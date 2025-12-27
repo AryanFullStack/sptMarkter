@@ -41,6 +41,9 @@ export function ProductCard({
 }: ProductCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
 
+  // We rely on parent to pass the correct role-based price
+  const displayPrice = price;
+
   return (
     <div className="group relative bg-white rounded-lg border border-charcoal/10 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
       {/* Wishlist Button */}
@@ -104,9 +107,9 @@ export function ProductCard({
 
         <div className="flex items-center gap-2">
           <span className="font-display text-xl font-bold text-gold">
-            Rs. {price.toLocaleString()}
+            Rs. {displayPrice.toLocaleString()}
           </span>
-          {originalPrice && originalPrice > price && (
+          {originalPrice && originalPrice > displayPrice && (
             <span className="text-sm text-charcoal-light line-through">
               Rs. {originalPrice.toLocaleString()}
             </span>

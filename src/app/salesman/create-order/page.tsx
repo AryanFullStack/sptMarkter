@@ -60,6 +60,9 @@ export default function CreateOrderPage() {
     // Check limit state
     const [limitCheck, setLimitCheck] = useState<{ valid: boolean; message?: string }>({ valid: true });
 
+    // Payment due date state
+    const [paymentDue, setPaymentDue] = useState<string>("");
+
     useEffect(() => {
         if (shopId && brandId) {
             loadData();
@@ -136,11 +139,19 @@ export default function CreateOrderPage() {
     const checkLimit = () => {
         if (!financialStatus) return;
 
+        const additionalPending = Math.max(0, totalAmount - collectedAmount);
+
+        // Feature: Block new orders if overdue exists
+        if (financialStatus.hasOverduePayments && additionalPending > 0) {
+            setLimitCheck({
+                valid: false,
+                message: `LOCKED: This client has OVERDUE payments. Please collect outstanding dues first or pay in full.`
+            });
+            return;
+        }
+
         const pendingLimit = financialStatus.pendingLimit;
         const currentPending = financialStatus.currentPending;
-        // The new pending amount added to the limit is (Order Total - Paid Amount)
-        // If we pay fully, 0 is added.
-        const additionalPending = Math.max(0, totalAmount - collectedAmount);
         const newTotalPending = currentPending + additionalPending;
 
         if (pendingLimit > 0 && newTotalPending > pendingLimit) {
@@ -164,6 +175,12 @@ export default function CreateOrderPage() {
             return;
         }
 
+        const newPending = totalAmount - collectedAmount;
+        if (newPending > 0 && !paymentDue) {
+            notify.error("Payment Due Date Required", "Please set a due date for the pending payment.");
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             // Transform cart for backend
@@ -176,7 +193,7 @@ export default function CreateOrderPage() {
             }));
 
             // Pass collected amount (paidAmount)
-            const result = await createOrderForClient(shopId, items, collectedAmount, brandId, notes);
+            const result = await createOrderForClient(shopId, items, collectedAmount, brandId, notes, undefined, paymentDue ? new Date(paymentDue).toISOString() : null);
 
             if (result.error) {
                 notify.error("Failed to create order", result.error);
@@ -370,6 +387,24 @@ export default function CreateOrderPage() {
                                         <div className="bg-red-50 p-2 rounded-md flex gap-2 text-xs text-red-600 border border-red-200">
                                             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                                             {limitCheck.message}
+                                        </div>
+                                    )}
+
+                                    {newPendingAmount > 0 && (
+                                        <div className="space-y-1 pt-2 border-t">
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1">
+                                                    Payment Due Date <span className="text-red-500">*</span>
+                                                </label>
+                                            </div>
+                                            <Input
+                                                type="date"
+                                                value={paymentDue}
+                                                onChange={(e) => setPaymentDue(e.target.value)}
+                                                min={new Date().toISOString().split('T')[0]}
+                                                className="h-10"
+                                                required
+                                            />
                                         </div>
                                     )}
                                 </div>

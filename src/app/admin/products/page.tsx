@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import useSWR from "swr";
 import { createClient } from "@/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable, Column } from "@/components/shared/data-table";
 import { ExportButton } from "@/components/shared/export-button";
 import { ProductForm } from "@/components/admin/product-form";
-import { Package, Plus, Edit, Trash2, Image as ImageIcon } from "lucide-react";
+import { Package, Plus, Edit, Trash2, Image as ImageIcon, Loader2, RefreshCw } from "lucide-react";
 import { formatDate, formatCurrency } from "@/utils/export-utils";
 import { deleteProduct } from "@/app/admin/actions";
 import { notify } from "@/lib/notifications";
@@ -51,49 +52,25 @@ export default function ProductsPage() {
   const ITEMS_PER_PAGE = 15;
   const supabase = createClient();
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+  // 1. SWR for Stats
+  const { data: statsData, mutate: mutateStats } = useSWR('product-stats', async () => {
+    const [totalRes, lowStockRes, featuredRes] = await Promise.all([
+      supabase.from("products").select("id", { count: "exact", head: true }),
+      supabase.from("products").select("id", { count: "exact", head: true }).lte("stock_quantity", 10),
+      supabase.from("products").select("id", { count: "exact", head: true }).eq("is_featured", true)
+    ]);
+    return {
+      total: totalRes.count || 0,
+      lowStock: lowStockRes.count || 0,
+      featured: featuredRes.count || 0
+    };
+  });
 
-  useEffect(() => {
-    loadProducts(currentPage, searchQuery, filter);
-  }, [currentPage, filter]); // Search is handled by debounce/enter separately
-
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (currentPage === 1) {
-        loadProducts(1, searchQuery, filter);
-      } else {
-        setCurrentPage(1); // will trigger above effect
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-
-  async function loadStats() {
-    try {
-      const [totalRes, lowStockRes, featuredRes] = await Promise.all([
-        supabase.from("products").select("id", { count: "exact", head: true }),
-        supabase.from("products").select("id", { count: "exact", head: true }).lte("stock_quantity", 10),
-        supabase.from("products").select("id", { count: "exact", head: true }).eq("is_featured", true)
-      ]);
-
-      setStats({
-        total: totalRes.count || 0,
-        lowStock: lowStockRes.count || 0,
-        featured: featuredRes.count || 0
-      });
-    } catch (e) {
-      console.error("Error loading stats", e);
-    }
-  }
-
-  async function loadProducts(page: number, search: string, activeFilter: string) {
-    setLoading(true);
-    try {
-      const from = (page - 1) * ITEMS_PER_PAGE;
+  // 2. SWR for Products List
+  const { data: productsData, isLoading: productsLoading, mutate: mutateProducts } = useSWR(
+    ['admin-products', currentPage, filter, searchQuery],
+    async () => {
+      const from = (currentPage - 1) * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
       let query = supabase
@@ -104,35 +81,62 @@ export default function ProductsPage() {
             category:categories(name)
           `, { count: "exact" });
 
-      // Apply filters
-      if (activeFilter === "low-stock") {
-        query = query.lte("stock_quantity", 10);
-      } else if (activeFilter === "featured") {
-        query = query.eq("is_featured", true);
-      }
+      if (filter === "low-stock") query = query.lte("stock_quantity", 10);
+      else if (filter === "featured") query = query.eq("is_featured", true);
 
-      // Apply search
-      if (search) {
-        query = query.ilike("name", `%${search}%`);
-      }
+      if (searchQuery) query = query.ilike("name", `%${searchQuery}%`);
 
       const { data, count, error } = await query
         .order("created_at", { ascending: false })
         .range(from, to);
 
       if (error) throw error;
+      return { products: (data || []) as Product[], count: count || 0 };
+    },
+    { keepPreviousData: true }
+  );
 
-      setProducts(data || []);
-      if (count !== null) {
-        setTotalItems(count);
-        setTotalPages(Math.ceil(count / ITEMS_PER_PAGE));
-      }
-    } catch (error) {
-      console.error("Error loading products:", error);
-      notify.error("Error", "Failed to load products");
-    } finally {
-      setLoading(false);
+  // 3. Realtime Subscription
+  useEffect(() => {
+    const channel = supabase.channel('admin-product-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        mutateProducts();
+        mutateStats();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
+  // Sync state with SWR
+  useEffect(() => {
+    if (productsData) {
+      setProducts(productsData.products);
+      setTotalItems(productsData.count);
+      setTotalPages(Math.ceil(productsData.count / ITEMS_PER_PAGE));
     }
+  }, [productsData]);
+
+  useEffect(() => {
+    if (statsData) setStats(statsData);
+  }, [statsData]);
+
+  // Loaders are now controlled by productsLoading
+  useEffect(() => {
+    setLoading(productsLoading);
+  }, [productsLoading]);
+
+  // Debounce search is handled by SWR's key reactivity, 
+  // but we keep the searchQuery state update for UI responsiveness.
+
+  async function loadProducts() {
+    mutateProducts();
+  }
+
+  async function loadStats() {
+    mutateStats();
   }
 
   const handleDelete = async (productId: string) => {
@@ -141,7 +145,7 @@ export default function ProductsPage() {
     try {
       await deleteProduct(productId);
       notify.success("Product Deleted", "Product has been successfully deleted from the catalog.");
-      loadProducts(currentPage, searchQuery, filter);
+      loadProducts();
       loadStats(); // Refresh stats
     } catch (error: any) {
       console.error("Error deleting product:", error);
@@ -157,7 +161,7 @@ export default function ProductsPage() {
   const handleFormClose = () => {
     setShowForm(false);
     setEditingProduct(null);
-    loadProducts(currentPage, searchQuery, filter);
+    loadProducts();
     loadStats();
   };
 

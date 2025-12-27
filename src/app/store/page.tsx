@@ -11,6 +11,20 @@ export default async function StorePage({
 }) {
   const supabase = await createClient();
 
+  // Fetch authenticated user and role server-side for accurate initial pricing
+  const { data: { user } } = await supabase.auth.getUser();
+  let userRole: string | null = null;
+
+  if (user) {
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    userRole = userData?.role || null;
+  }
+
   // Fetch brands and categories for filters first to resolve slugs
   const { data: brands } = await supabase.from("brands").select("*");
   const { data: categories } = await supabase.from("categories").select("*");
@@ -73,7 +87,7 @@ export default async function StorePage({
               </p>
             </div>
 
-            <ProductGrid products={products || []} />
+            <ProductGrid products={products || []} initialUserRole={userRole} />
           </div>
         </div>
       </div>

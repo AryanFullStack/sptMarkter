@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/supabase/client";
+import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,51 +15,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { User, ShoppingCart, LogOut, LayoutDashboard } from "lucide-react";
+import NotificationBell from "@/components/notifications/notification-bell";
 
 export default function Navbar() {
-  const [user, setUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, userRole, loading, signOut } = useAuth();
   const router = useRouter();
-  const supabase = createClient();
 
-  useEffect(() => {
-    checkUser();
-  }, []);
-
-  async function checkUser() {
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (authUser) {
-      setUser(authUser);
-
-      // Fetch user role from database
-      const { data: userData } = await supabase
-        .from("users")
-        .select("role, full_name")
-        .eq("id", authUser.id)
-        .single();
-
-      if (userData) {
-        setUserRole(userData.role);
-      }
-    }
-
-    setLoading(false);
-  }
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    window.location.href = "/";
-  }
+  // Use context's signOut instead of local logic
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   const getDashboardLink = () => {
     if (!userRole) return "/dashboard";
     if (userRole === "admin" || userRole === "sub_admin") return "/admin";
     return "/dashboard";
   };
+
+
 
   const getRoleBadgeColor = () => {
     switch (userRole) {
@@ -116,6 +89,9 @@ export default function Navbar() {
               <div className="w-20 h-8 bg-[#F7F5F2] animate-pulse rounded" />
             ) : user ? (
               <>
+                {/* Notification Bell */}
+                <NotificationBell />
+
                 {/* Cart Icon (for customers) */}
                 {userRole === "customer" && (
                   <Link href="/cart">

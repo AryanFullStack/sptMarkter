@@ -24,6 +24,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
+    "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.5.2",
     "framer-motion": "^12.5.0",
     "gh": "^2.8.9",
@@ -41,6 +42,7 @@
     "recharts": "^3.5.1",
     "sharp": "^0.34.5",
     "stripe": "^17.6.0",
+    "swr": "^2.3.8",
     "tempo-devtools": "^2.0.94",
     "vaul": "^1.1.2"
   },

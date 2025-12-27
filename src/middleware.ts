@@ -69,6 +69,11 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // Add specific headers to prevent caching of protected routes and ensure latest auth state
+  if (!res.headers.get('Cache-Control')) {
+    res.headers.set('Cache-Control', 'no-store, must-revalidate');
+  }
+
   return res
 }
 
